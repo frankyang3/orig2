@@ -1,6 +1,7 @@
 import Phaser from "phaser";
-import { PLAYER_VELOCITY, INTERPOLATION_SPEED } from "../../../shared/src/constants";
+import { PLAYER_VELOCITY } from "../../../shared/src/constants";
 import { InputPayload } from "../../../shared/src/types";
+import { INTERPOLATION_SPEED } from "../clientConstants";
 
 type PlayerEntity = Phaser.Types.Physics.Arcade.ImageWithDynamicBody;
 

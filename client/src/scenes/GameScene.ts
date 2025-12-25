@@ -3,6 +3,7 @@ import { FIXED_TIME_STEP } from "../../../shared/src/constants";
 import { InputManager } from "../systems/InputManager";
 import { PlayerManager } from "../systems/PlayerManager";
 import { NetworkClient } from "../network/NetworkManager";
+import { ASSETS } from "../clientConstants";
 
 export class GameScene extends Phaser.Scene {
     private inputManager!: InputManager;
@@ -13,7 +14,7 @@ export class GameScene extends Phaser.Scene {
     preload(): void {
         this.load.image(
             "ship_0001",
-            "https://cdn.glitch.global/3e033dcd-d5be-4db4-99e8-086ae90969ec/ship_0001.png"
+            ASSETS.SHIP
         );
 
         this.inputManager = new InputManager(this);

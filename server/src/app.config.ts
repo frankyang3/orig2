@@ -4,6 +4,7 @@ import { playground } from "@colyseus/playground";
 //rooms
 import { GameRoom } from "./rooms/GameRoom";
 import { ROOM_NAME } from "../../shared/src/constants";
+import { SIM_LATENCY_MS } from "./serverConstants"
 
 export default config({
 
@@ -11,7 +12,7 @@ export default config({
         /**
          * Define your room handlers:
          */
-        gameServer.simulateLatency(10);
+        gameServer.simulateLatency(SIM_LATENCY_MS);
 
         gameServer.define(ROOM_NAME, GameRoom);
 

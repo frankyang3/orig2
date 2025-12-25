@@ -1,7 +1,8 @@
 import { Client, Room } from "colyseus.js";
 import { getStateCallbacks } from "colyseus.js";
-import { SERVER_URL, ROOM_NAME, MESSAGE_TYPES } from "../../../shared/src/constants";
+import { ROOM_NAME, MESSAGE_TYPES } from "../../../shared/src/constants";
 import { InputPayload } from "../../../shared/src/types";
+import { SERVER_URL } from "../clientConstants"
 
 export interface PlayerCallbacks {
     onAdd: (sessionId: string, x: number, y: number, isLocal: boolean) => void;

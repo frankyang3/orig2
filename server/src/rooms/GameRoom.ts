@@ -2,7 +2,8 @@ import { Room, Client } from "@colyseus/core";
 import { GameState } from "../schema/GameState";
 import { PlayerSystem } from "../systems/PlayerSystem";
 import { InputPayload } from "../../../shared/src/types";
-import { FIXED_TIME_STEP, MAX_CLIENTS, MESSAGE_TYPES } from "../../../shared/src/constants";
+import { FIXED_TIME_STEP, MESSAGE_TYPES } from "../../../shared/src/constants";
+import { MAX_CLIENTS } from "../serverConstants";
 
 export class GameRoom extends Room<GameState> {
   maxClients = MAX_CLIENTS;
@@ -10,7 +11,7 @@ export class GameRoom extends Room<GameState> {
   private elapsedTime = 0;
 
   onCreate(): void {
-    this.setState(new GameState());
+    this.state = new GameState();
     this.playerSystem = new PlayerSystem(this.state.players);
 
     this.setupMessageHandlers();
