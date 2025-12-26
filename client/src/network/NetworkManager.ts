@@ -1,6 +1,6 @@
 import { Client, Room } from "colyseus.js";
 import { getStateCallbacks } from "colyseus.js";
-import { ROOM_NAME, MESSAGE_TYPES } from "../../../shared/src/constants";
+import { ROOM_NAME, MESSAGE_TYPES, WORLD_WIDTH } from "../../../shared/src/constants";
 import { InputPayload } from "../../../shared/src/types";
 import { SERVER_URL } from "../clientConstants"
 
@@ -9,6 +9,8 @@ export interface PlayerCallbacks {
     onRemove: (sessionId: string) => void;
     onLocalUpdate: (x: number, y: number) => void;
     onRemoteUpdate: (sessionId: string, x: number, y: number) => void;
+    onWorldInit: (blocks: { blockType: number }[]) => void;
+    onBlockChange: (x: number, y: number, blockType: number) => void;
 }
 
 export class NetworkClient {
@@ -19,7 +21,12 @@ export class NetworkClient {
         try {
             this.room = await this.client.joinOrCreate(ROOM_NAME);
             console.log("Joined room:", this.room.sessionId);
-            this.setupCallbacks(callbacks);
+
+            // Wait for state to be ready
+            this.room.onStateChange.once((state) => {
+                console.log("State ready:", state);
+                this.setupCallbacks(callbacks);
+            });
         } catch (e) {
             console.error("Failed to join room:", e);
             throw e;
@@ -32,6 +39,12 @@ export class NetworkClient {
         const $ = getStateCallbacks(this.room);
         const state = this.room.state as any;
 
+        // Debug: see what's in the state
+        console.log("State:", state);
+        console.log("State.worldMap:", state.worldMap);
+        console.log("State.players:", state.players);
+
+        // Player callbacks
         $(state).players.onAdd((player: any, sessionId: string) => {
             const isLocal = sessionId === this.room!.sessionId;
             callbacks.onAdd(sessionId, player.x, player.y, isLocal);
@@ -47,6 +60,27 @@ export class NetworkClient {
 
         $(state).players.onRemove((_: any, sessionId: string) => {
             callbacks.onRemove(sessionId);
+        });
+
+        // World callbacks
+        const blocksArray: { blockType: number }[] = [];
+        let initialized = false;
+
+        $(state).worldMap.blocks.onAdd((block: any, index: number) => {
+            blocksArray[index] = { blockType: block.blockType };
+
+            // Listen for changes to this block
+            $(block).onChange(() => {
+                const x = index % WORLD_WIDTH;
+                const y = Math.floor(index / WORLD_WIDTH);
+                callbacks.onBlockChange(x, y, block.blockType);
+            });
+
+            // Check if all blocks have been added
+            if (!initialized && blocksArray.length === state.worldMap.blocks.length) {
+                initialized = true;
+                callbacks.onWorldInit(blocksArray);
+            }
         });
     }
 

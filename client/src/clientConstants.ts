@@ -14,3 +14,8 @@ export const DISPLAY = {
   HEIGHT: 600,
   BACKGROUND: "#b6d53c",
 } as const;
+
+// Threshold for position correction
+export const SNAP_THRESHOLD = 50;  // If off by more than this, snap immediately
+export const CORRECTION_THRESHOLD = 2;  // If off by more than this, start correcting
+export const CORRECTION_SPEED = 0.2;  // How fast to correct (0-1)
