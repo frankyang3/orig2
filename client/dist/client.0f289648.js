@@ -177906,10 +177906,11 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         });
         this.setupCamera();
     }
+    //TODO refactor camera to separate system
     setupCamera() {
         const worldPixelWidth = (0, _constants.WORLD_WIDTH) * (0, _constants.TILE_SIZE);
         const worldPixelHeight = (0, _constants.WORLD_HEIGHT) * (0, _constants.TILE_SIZE);
-        this.cameras.main.setBounds(0, 0, worldPixelWidth, worldPixelHeight);
+        this.cameras.main.setBounds(this.WORLD_BORDER_ORIGIN_X, this.WORLD_BORDER_ORIGIN_Y, worldPixelWidth, worldPixelHeight);
     }
     update(_time, delta) {
         if (!this.playerManager.hasLocalPlayer()) return;
@@ -177931,7 +177932,7 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         this.playerManager.interpolateRemotePlayers();
     }
     constructor(...args){
-        super(...args), this.elapsedTime = 0;
+        super(...args), this.elapsedTime = 0, this.WORLD_BORDER_ORIGIN_X = 0, this.WORLD_BORDER_ORIGIN_Y = 0;
     }
 }
 
@@ -178056,6 +178057,8 @@ var _phaser = require("phaser");
 var _phaserDefault = parcelHelpers.interopDefault(_phaser);
 var _constants = require("../../../shared/src/constants");
 var _clientConstants = require("../clientConstants");
+const SERVER_X = "serverX";
+const SERVER_Y = "serverY";
 class PlayerManager {
     constructor(scene){
         this.scene = scene;
@@ -178063,15 +178066,18 @@ class PlayerManager {
         this.serverX = 0;
         this.serverY = 0;
     }
+    // sets world on client to be same as server (for collision detection)
     setWorldData(blocks) {
         this.worldBlocks = blocks;
     }
     updateBlockType(index, blockType) {
         if (this.worldBlocks && index < this.worldBlocks.length) this.worldBlocks[index].blockType = blockType;
     }
+    // adds player entity to the scene (can be any player)
     addPlayer(sessionId, x, y, isLocal) {
         const entity = this.scene.physics.add.image(x, y, "ship_0001");
         this.entities.set(sessionId, entity);
+        // additional setup for local player (debug, etc.)
         if (isLocal) {
             this.localPlayer = entity;
             this.localSessionId = sessionId;
@@ -178082,6 +178088,7 @@ class PlayerManager {
         }
         return entity;
     }
+    // removes player entity from the scene
     removePlayer(sessionId) {
         const entity = this.entities.get(sessionId);
         if (entity) {
@@ -178089,6 +178096,7 @@ class PlayerManager {
             this.entities.delete(sessionId);
         }
     }
+    // updates remote reference position.
     updateRemoteRef(x, y) {
         if (this.remoteRef) {
             this.remoteRef.x = x;
@@ -178100,11 +178108,12 @@ class PlayerManager {
         this.serverX = x;
         this.serverY = y;
     }
+    // Called for remote players (not the local player)
     setServerPosition(sessionId, x, y) {
         const entity = this.entities.get(sessionId);
         if (entity) {
-            entity.setData("serverX", x);
-            entity.setData("serverY", y);
+            entity.setData(SERVER_X, x);
+            entity.setData(SERVER_Y, y);
         }
     }
     applyInput(input) {
@@ -178178,8 +178187,8 @@ class PlayerManager {
     interpolateRemotePlayers() {
         for (const [sessionId, entity] of this.entities){
             if (sessionId === this.localSessionId) continue;
-            const serverX = entity.getData("serverX");
-            const serverY = entity.getData("serverY");
+            const serverX = entity.getData(SERVER_X);
+            const serverY = entity.getData(SERVER_Y);
             if (serverX !== undefined && serverY !== undefined) {
                 entity.x = (0, _phaserDefault.default).Math.Linear(entity.x, serverX, (0, _clientConstants.INTERPOLATION_SPEED));
                 entity.y = (0, _phaserDefault.default).Math.Linear(entity.y, serverY, (0, _clientConstants.INTERPOLATION_SPEED));
@@ -178227,6 +178236,7 @@ const CORRECTION_SPEED = 0.2; // How fast to correct (0-1)
 },{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"jEGNe":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
+//TODO revisit magic numbers here
 parcelHelpers.export(exports, "WorldRenderer", ()=>WorldRenderer);
 var _constants = require("../../../shared/src/constants");
 class WorldRenderer {
@@ -178262,12 +178272,15 @@ class WorldRenderer {
             this.updateTile(x, y, blocks[i].blockType);
         }
     }
+    //utils
+    // input pixel position, get tile poition
     worldToTile(worldX, worldY) {
         return {
             x: Math.floor(worldX / (0, _constants.TILE_SIZE)),
             y: Math.floor(worldY / (0, _constants.TILE_SIZE))
         };
     }
+    // input tile position, get pixel position (center of tile)
     tileToWorld(tileX, tileY) {
         return {
             x: tileX * (0, _constants.TILE_SIZE) + (0, _constants.TILE_SIZE) / 2,
@@ -178306,21 +178319,25 @@ class NetworkClient {
         console.log("State:", state);
         console.log("State.worldMap:", state.worldMap);
         console.log("State.players:", state.players);
-        // Player callbacks
+        //Player Callbacks
+        // When player joins
         $(state).players.onAdd((player, sessionId)=>{
             const isLocal = sessionId === this.room.sessionId;
             callbacks.onAdd(sessionId, player.x, player.y, isLocal);
+            // subscribe to changes in each player (local vs. remote)
             $(player).onChange(()=>{
                 if (isLocal) callbacks.onLocalUpdate(player.x, player.y);
                 else callbacks.onRemoteUpdate(sessionId, player.x, player.y);
             });
         });
+        // any player disconnects
         $(state).players.onRemove((_, sessionId)=>{
             callbacks.onRemove(sessionId);
         });
         // World callbacks
         const blocksArray = [];
         let initialized = false;
+        // when any block is added (should happen in bulk on join)
         $(state).worldMap.blocks.onAdd((block, index)=>{
             blocksArray[index] = {
                 blockType: block.blockType

@@ -7,6 +7,9 @@ import {
   BLOCK_TYPE 
 } from "../../../shared/src/constants";
 
+
+//TODO revisit magic numbers here
+
 export class WorldRenderer {
   private tiles: Phaser.GameObjects.Rectangle[][] = [];
   private container: Phaser.GameObjects.Container;
@@ -56,6 +59,9 @@ export class WorldRenderer {
     }
   }
 
+  //utils
+
+  // input pixel position, get tile poition
   worldToTile(worldX: number, worldY: number): { x: number; y: number } {
     return {
       x: Math.floor(worldX / TILE_SIZE),
@@ -63,6 +69,7 @@ export class WorldRenderer {
     };
   }
 
+  // input tile position, get pixel position (center of tile)
   tileToWorld(tileX: number, tileY: number): { x: number; y: number } {
     return {
       x: tileX * TILE_SIZE + TILE_SIZE / 2,

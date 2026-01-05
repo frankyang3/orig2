@@ -12,6 +12,8 @@ export class GameScene extends Phaser.Scene {
     private worldRenderer!: WorldRenderer;
     private network!: NetworkClient;
     private elapsedTime = 0;
+    private WORLD_BORDER_ORIGIN_X = 0;
+    private WORLD_BORDER_ORIGIN_Y = 0
 
     preload(): void {
         this.load.image(
@@ -59,10 +61,11 @@ export class GameScene extends Phaser.Scene {
         this.setupCamera();
     }
 
+    //TODO refactor camera to separate system
     private setupCamera(): void {
         const worldPixelWidth = WORLD_WIDTH * TILE_SIZE;
         const worldPixelHeight = WORLD_HEIGHT * TILE_SIZE;
-        this.cameras.main.setBounds(0, 0, worldPixelWidth, worldPixelHeight);
+        this.cameras.main.setBounds(this.WORLD_BORDER_ORIGIN_X, this.WORLD_BORDER_ORIGIN_Y, worldPixelWidth, worldPixelHeight);
     }
 
     update(_time: number, delta: number): void {

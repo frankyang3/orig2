@@ -44,11 +44,13 @@ export class NetworkClient {
         console.log("State.worldMap:", state.worldMap);
         console.log("State.players:", state.players);
 
-        // Player callbacks
+        //Player Callbacks
+        // When player joins
         $(state).players.onAdd((player: any, sessionId: string) => {
             const isLocal = sessionId === this.room!.sessionId;
             callbacks.onAdd(sessionId, player.x, player.y, isLocal);
 
+            // subscribe to changes in each player (local vs. remote)
             $(player).onChange(() => {
                 if (isLocal) {
                     callbacks.onLocalUpdate(player.x, player.y);
@@ -58,6 +60,7 @@ export class NetworkClient {
             });
         });
 
+        // any player disconnects
         $(state).players.onRemove((_: any, sessionId: string) => {
             callbacks.onRemove(sessionId);
         });
@@ -66,6 +69,7 @@ export class NetworkClient {
         const blocksArray: { blockType: number }[] = [];
         let initialized = false;
 
+        // when any block is added (should happen in bulk on join)
         $(state).worldMap.blocks.onAdd((block: any, index: number) => {
             blocksArray[index] = { blockType: block.blockType };
 

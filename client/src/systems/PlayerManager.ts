@@ -6,7 +6,8 @@ import { INTERPOLATION_SPEED, SNAP_THRESHOLD, CORRECTION_SPEED, CORRECTION_THRES
 
 type PlayerEntity = Phaser.Types.Physics.Arcade.ImageWithDynamicBody;
 
-
+const SERVER_X = "serverX";
+const SERVER_Y = "serverY";
 
 export class PlayerManager {
     private entities: Map<string, PlayerEntity> = new Map();
@@ -14,29 +15,31 @@ export class PlayerManager {
     private localSessionId?: string;
     private worldBlocks?: { blockType: number }[];
 
-    // Server reconciliation
+    // Server reconciliation - this is our local player's server position
     private serverX = 0;
     private serverY = 0;
 
-    // Debug visualization
+    // debug rectangle, shows server position(red rectangle for server position)
     private remoteRef?: Phaser.GameObjects.Rectangle;
 
     constructor(private scene: Phaser.Scene) { }
 
+    // sets world on client to be same as server (for collision detection)
     setWorldData(blocks: { blockType: number }[]): void {
         this.worldBlocks = blocks;
     }
-
     updateBlockType(index: number, blockType: number): void {
         if (this.worldBlocks && index < this.worldBlocks.length) {
             this.worldBlocks[index].blockType = blockType;
         }
     }
 
+    // adds player entity to the scene (can be any player)
     addPlayer(sessionId: string, x: number, y: number, isLocal: boolean): PlayerEntity {
         const entity = this.scene.physics.add.image(x, y, "ship_0001");
         this.entities.set(sessionId, entity);
 
+        // additional setup for local player (debug, etc.)
         if (isLocal) {
             this.localPlayer = entity;
             this.localSessionId = sessionId;
@@ -49,6 +52,7 @@ export class PlayerManager {
         return entity;
     }
 
+    // removes player entity from the scene
     removePlayer(sessionId: string): void {
         const entity = this.entities.get(sessionId);
         if (entity) {
@@ -57,6 +61,7 @@ export class PlayerManager {
         }
     }
 
+    // updates remote reference position.
     updateRemoteRef(x: number, y: number): void {
         if (this.remoteRef) {
             this.remoteRef.x = x;
@@ -70,11 +75,12 @@ export class PlayerManager {
         this.serverY = y;
     }
 
+    // Called for remote players (not the local player)
     setServerPosition(sessionId: string, x: number, y: number): void {
         const entity = this.entities.get(sessionId);
         if (entity) {
-            entity.setData("serverX", x);
-            entity.setData("serverY", y);
+            entity.setData(SERVER_X, x);
+            entity.setData(SERVER_Y, y);
         }
     }
 
@@ -159,8 +165,8 @@ export class PlayerManager {
         for (const [sessionId, entity] of this.entities) {
             if (sessionId === this.localSessionId) continue;
 
-            const serverX = entity.getData("serverX");
-            const serverY = entity.getData("serverY");
+            const serverX = entity.getData(SERVER_X);
+            const serverY = entity.getData(SERVER_Y);
             if (serverX !== undefined && serverY !== undefined) {
                 entity.x = Phaser.Math.Linear(entity.x, serverX, INTERPOLATION_SPEED);
                 entity.y = Phaser.Math.Linear(entity.y, serverY, INTERPOLATION_SPEED);
