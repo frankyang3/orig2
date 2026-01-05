@@ -187734,7 +187734,7 @@ class CollisionManager {
     updateBlockType(index, blockType) {
         if (this.worldBlocks && index < this.worldBlocks.length) this.worldBlocks[index].blockType = blockType;
     }
-    canMoveTo(x, y, playerSize = 16) {
+    canMoveTo(x, y, playerSize = PLAYER_SIZE / 2) {
         if (!this.worldBlocks) return true;
         // Check world collision
         const corners = [

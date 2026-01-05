@@ -1,6 +1,6 @@
 import { MapSchema } from "@colyseus/schema";
 import { Player } from "../schema/Player";
-import { PLAYER_SIZE } from "../serverConstants";
+import { PLAYER_SIZE } from "../../../shared/src/constants";
 
 export class PlayerCollisionManager {
     private playerRadius: number;

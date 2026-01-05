@@ -2,8 +2,8 @@ import { MapSchema } from "@colyseus/schema";
 import { Player } from "../schema/Player";
 import { WorldMap } from "../schema/World";
 import { InputPayload } from "../../../shared/src/types";
-import { PLAYER_VELOCITY, TILE_SIZE, BLOCK_TYPE } from "../../../shared/src/constants";
-import { PLAYER_SIZE, PLAYER_SPAWN_X, PLAYER_SPAWN_Y } from "../serverConstants";
+import { PLAYER_VELOCITY, TILE_SIZE, BLOCK_TYPE, PLAYER_SIZE } from "../../../shared/src/constants";
+import { PLAYER_SPAWN_X, PLAYER_SPAWN_Y } from "../serverConstants";
 import { PlayerCollisionManager } from "./PlayerCollisionManager";
 
 export class PlayerSystem {

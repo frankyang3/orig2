@@ -1,4 +1,4 @@
-import { TILE_SIZE, BLOCK_TYPE, WORLD_WIDTH } from "../../../shared/src/constants";
+import { TILE_SIZE, BLOCK_TYPE, WORLD_WIDTH, PLAYER_SIZE } from "../../../shared/src/constants";
 
 export class CollisionManager {
     private worldBlocks?: { blockType: number }[];
@@ -27,7 +27,7 @@ export class CollisionManager {
         }
     }
 
-    canMoveTo(x: number, y: number, playerSize: number = 16): boolean {
+    canMoveTo(x: number, y: number, playerSize: number = PLAYER_SIZE / 2): boolean {
         if (!this.worldBlocks) return true;
 
         // Check world collision
