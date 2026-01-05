@@ -177887,10 +177887,12 @@ class GameScene extends (0, _phaserDefault.default).Scene {
             onRemove: (sessionId)=>{
                 this.playerManager.removePlayer(sessionId);
             },
+            //when local player updates
             onLocalUpdate: (x, y)=>{
                 this.playerManager.updateRemoteRef(x, y);
                 this.playerManager.onServerUpdate(x, y);
             },
+            // when remote players update
             onRemoteUpdate: (sessionId, x, y)=>{
                 this.playerManager.setServerPosition(sessionId, x, y);
             },
@@ -178214,13 +178216,16 @@ class PlayerManager {
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "SERVER_URL", ()=>SERVER_URL);
 parcelHelpers.export(exports, "INTERPOLATION_SPEED", ()=>INTERPOLATION_SPEED);
+parcelHelpers.export(exports, "BACKGROUND_DEPTH_LAYER", ()=>BACKGROUND_DEPTH_LAYER);
 parcelHelpers.export(exports, "ASSETS", ()=>ASSETS);
 parcelHelpers.export(exports, "DISPLAY", ()=>DISPLAY);
+parcelHelpers.export(exports, "TILE_STROKE_STYLE", ()=>TILE_STROKE_STYLE);
 parcelHelpers.export(exports, "SNAP_THRESHOLD", ()=>SNAP_THRESHOLD);
 parcelHelpers.export(exports, "CORRECTION_THRESHOLD", ()=>CORRECTION_THRESHOLD);
 parcelHelpers.export(exports, "CORRECTION_SPEED", ()=>CORRECTION_SPEED);
 const SERVER_URL = "ws://localhost:2567";
 const INTERPOLATION_SPEED = 0.3;
+const BACKGROUND_DEPTH_LAYER = -1;
 const ASSETS = {
     SHIP: "https://cdn.glitch.global/3e033dcd-d5be-4db4-99e8-086ae90969ec/ship_0001.png"
 };
@@ -178229,6 +178234,11 @@ const DISPLAY = {
     HEIGHT: 600,
     BACKGROUND: "#b6d53c"
 };
+const TILE_STROKE_STYLE = {
+    WIDTH: 1,
+    COLOR: 0x000000,
+    ALPHA: 0.2
+};
 const SNAP_THRESHOLD = 50; // If off by more than this, snap immediately
 const CORRECTION_THRESHOLD = 2; // If off by more than this, start correcting
 const CORRECTION_SPEED = 0.2; // How fast to correct (0-1)
@@ -178236,28 +178246,29 @@ const CORRECTION_SPEED = 0.2; // How fast to correct (0-1)
 },{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"jEGNe":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
-//TODO revisit magic numbers here
 parcelHelpers.export(exports, "WorldRenderer", ()=>WorldRenderer);
 var _constants = require("../../../shared/src/constants");
+var _clientConstants = require("../clientConstants");
 class WorldRenderer {
     constructor(scene){
         this.scene = scene;
         this.tiles = [];
         this.container = this.scene.add.container(0, 0);
-        this.container.setDepth(-1);
+        this.container.setDepth((0, _clientConstants.BACKGROUND_DEPTH_LAYER)); // depth to be behind players
     }
     initialize() {
         for(let y = 0; y < (0, _constants.WORLD_HEIGHT); y++){
             this.tiles[y] = [];
             for(let x = 0; x < (0, _constants.WORLD_WIDTH); x++){
                 const tile = this.scene.add.rectangle(x * (0, _constants.TILE_SIZE) + (0, _constants.TILE_SIZE) / 2, y * (0, _constants.TILE_SIZE) + (0, _constants.TILE_SIZE) / 2, (0, _constants.TILE_SIZE) - 1, (0, _constants.TILE_SIZE) - 1, (0, _constants.BLOCK_COLORS)[(0, _constants.BLOCK_TYPE).GRASS]);
-                tile.setStrokeStyle(1, 0x000000, 0.2);
+                tile.setStrokeStyle((0, _clientConstants.TILE_STROKE_STYLE).WIDTH, (0, _clientConstants.TILE_STROKE_STYLE).COLOR, (0, _clientConstants.TILE_STROKE_STYLE).ALPHA);
                 this.tiles[y][x] = tile;
                 this.container.add(tile);
             }
         }
     }
     updateTile(x, y, blockType) {
+        //if within bounds of map (0 is left tile)
         if (y < 0 || y >= (0, _constants.WORLD_HEIGHT) || x < 0 || x >= (0, _constants.WORLD_WIDTH)) return;
         const tile = this.tiles[y][x];
         if (tile) {
@@ -178289,7 +178300,7 @@ class WorldRenderer {
     }
 }
 
-},{"../../../shared/src/constants":"5e1U9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"f1pcv":[function(require,module,exports,__globalThis) {
+},{"../../../shared/src/constants":"5e1U9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","../clientConstants":"fGjaF"}],"f1pcv":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "NetworkClient", ()=>NetworkClient);

@@ -33,16 +33,19 @@ export class GameScene extends Phaser.Scene {
         this.network = new NetworkClient();
 
         await this.network.connect({
+            
             onAdd: (sessionId, x, y, isLocal) => {
                 this.playerManager.addPlayer(sessionId, x, y, isLocal);
             },
             onRemove: (sessionId) => {
                 this.playerManager.removePlayer(sessionId);
             },
+            //when local player updates
             onLocalUpdate: (x, y) => {
                 this.playerManager.updateRemoteRef(x, y);
                 this.playerManager.onServerUpdate(x, y);
             },
+            // when remote players update
             onRemoteUpdate: (sessionId, x, y) => {
                 this.playerManager.setServerPosition(sessionId, x, y);
             },

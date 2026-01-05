@@ -6,9 +6,8 @@ import {
   BLOCK_COLORS,
   BLOCK_TYPE 
 } from "../../../shared/src/constants";
+import { BACKGROUND_DEPTH_LAYER, TILE_STROKE_STYLE } from "../clientConstants";
 
-
-//TODO revisit magic numbers here
 
 export class WorldRenderer {
   private tiles: Phaser.GameObjects.Rectangle[][] = [];
@@ -16,7 +15,7 @@ export class WorldRenderer {
 
   constructor(private scene: Phaser.Scene) {
     this.container = this.scene.add.container(0, 0);
-    this.container.setDepth(-1);
+    this.container.setDepth(BACKGROUND_DEPTH_LAYER); // depth to be behind players
   }
 
   initialize(): void {
@@ -31,7 +30,7 @@ export class WorldRenderer {
           BLOCK_COLORS[BLOCK_TYPE.GRASS]
         );
         
-        tile.setStrokeStyle(1, 0x000000, 0.2);
+        tile.setStrokeStyle(TILE_STROKE_STYLE.WIDTH, TILE_STROKE_STYLE.COLOR, TILE_STROKE_STYLE.ALPHA);
         
         this.tiles[y][x] = tile;
         this.container.add(tile);
@@ -40,6 +39,7 @@ export class WorldRenderer {
   }
 
   updateTile(x: number, y: number, blockType: number): void {
+    //if within bounds of map (0 is left tile)
     if (y < 0 || y >= WORLD_HEIGHT || x < 0 || x >= WORLD_WIDTH) {
       return;
     }
