@@ -3,6 +3,7 @@ import { Player } from "../schema/Player";
 import { WorldMap } from "../schema/World";
 import { InputPayload } from "../../../shared/src/types";
 import { PLAYER_VELOCITY, TILE_SIZE, BLOCK_TYPE } from "../../../shared/src/constants";
+import { PLAYER_SIZE, PLAYER_SPAWN_X, PLAYER_SPAWN_Y } from "../serverConstants";
 
 export class PlayerSystem {
   private inputQueues: Map<string, InputPayload[]> = new Map();
@@ -26,7 +27,7 @@ export class PlayerSystem {
 
   private findSpawnPosition(): { x: number; y: number } {
     if (!this.worldMap) {
-      return { x: 100, y: 100 };
+      return { x: PLAYER_SPAWN_X, y: PLAYER_SPAWN_Y }; 
     }
 
     // Try to find an empty grass tile
@@ -44,7 +45,7 @@ export class PlayerSystem {
     }
 
     // Fallback
-    return { x: 100, y: 100 };
+    return { x: PLAYER_SPAWN_X, y: PLAYER_SPAWN_Y }; 
   }
 
   removePlayer(sessionId: string): void {
@@ -99,7 +100,7 @@ export class PlayerSystem {
     if (!this.worldMap) return true;
 
     // Check all four corners of the player (assuming 32x32 player size)
-    const playerSize = 16; // Half of player size
+    const playerSize = PLAYER_SIZE / 2; // Half of player size
     const corners = [
       { x: x - playerSize, y: y - playerSize }, // top-left
       { x: x + playerSize, y: y - playerSize }, // top-right

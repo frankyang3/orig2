@@ -177867,6 +177867,7 @@ var _constants = require("../../../shared/src/constants");
 var _inputManager = require("../systems/InputManager");
 var _playerManager = require("../systems/PlayerManager");
 var _worldRenderer = require("../systems/WorldRenderer");
+var _cameraManager = require("../systems/CameraManager");
 var _networkManager = require("../network/NetworkManager");
 var _clientConstants = require("../clientConstants");
 class GameScene extends (0, _phaserDefault.default).Scene {
@@ -177879,6 +177880,8 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         this.playerManager = new (0, _playerManager.PlayerManager)(this);
         this.worldRenderer = new (0, _worldRenderer.WorldRenderer)(this);
         this.worldRenderer.initialize();
+        this.cameraManager = new (0, _cameraManager.CameraManager)(this);
+        this.cameraManager.setup();
         this.network = new (0, _networkManager.NetworkClient)();
         await this.network.connect({
             onAdd: (sessionId, x, y, isLocal)=>{
@@ -177887,12 +177890,10 @@ class GameScene extends (0, _phaserDefault.default).Scene {
             onRemove: (sessionId)=>{
                 this.playerManager.removePlayer(sessionId);
             },
-            //when local player updates
             onLocalUpdate: (x, y)=>{
                 this.playerManager.updateRemoteRef(x, y);
                 this.playerManager.onServerUpdate(x, y);
             },
-            // when remote players update
             onRemoteUpdate: (sessionId, x, y)=>{
                 this.playerManager.setServerPosition(sessionId, x, y);
             },
@@ -177906,13 +177907,6 @@ class GameScene extends (0, _phaserDefault.default).Scene {
                 this.playerManager.updateBlockType(index, blockType);
             }
         });
-        this.setupCamera();
-    }
-    //TODO refactor camera to separate system
-    setupCamera() {
-        const worldPixelWidth = (0, _constants.WORLD_WIDTH) * (0, _constants.TILE_SIZE);
-        const worldPixelHeight = (0, _constants.WORLD_HEIGHT) * (0, _constants.TILE_SIZE);
-        this.cameras.main.setBounds(this.WORLD_BORDER_ORIGIN_X, this.WORLD_BORDER_ORIGIN_Y, worldPixelWidth, worldPixelHeight);
     }
     update(_time, delta) {
         if (!this.playerManager.hasLocalPlayer()) return;
@@ -177921,9 +177915,8 @@ class GameScene extends (0, _phaserDefault.default).Scene {
             this.elapsedTime -= (0, _constants.FIXED_TIME_STEP);
             this.fixedTick();
         }
-        // Follow local player
         const localPos = this.playerManager.getLocalPlayerPosition();
-        if (localPos) this.cameras.main.centerOn(localPos.x, localPos.y);
+        if (localPos) this.cameraManager.centerOn(localPos.x, localPos.y);
     }
     fixedTick() {
         if (!this.network.isConnected()) return;
@@ -177934,11 +177927,11 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         this.playerManager.interpolateRemotePlayers();
     }
     constructor(...args){
-        super(...args), this.elapsedTime = 0, this.WORLD_BORDER_ORIGIN_X = 0, this.WORLD_BORDER_ORIGIN_Y = 0;
+        super(...args), this.elapsedTime = 0;
     }
 }
 
-},{"phaser":"9nmdg","../../../shared/src/constants":"5e1U9","../systems/InputManager":"d1Ikp","../systems/PlayerManager":"eUghV","../systems/WorldRenderer":"jEGNe","../network/NetworkManager":"f1pcv","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"5e1U9":[function(require,module,exports,__globalThis) {
+},{"phaser":"9nmdg","../../../shared/src/constants":"5e1U9","../systems/InputManager":"d1Ikp","../systems/PlayerManager":"eUghV","../systems/WorldRenderer":"jEGNe","../network/NetworkManager":"f1pcv","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","../systems/CameraManager":"l83xX"}],"5e1U9":[function(require,module,exports,__globalThis) {
 // Timing
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
@@ -187835,6 +187828,29 @@ exports.write = function(buffer, value, offset, isLE, mLen, nBytes) {
     buffer[offset + i - d] |= s * 128;
 };
 
-},{}]},["elbaT","gNc1f"], "gNc1f", "parcelRequiree8ef", {})
+},{}],"l83xX":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "CameraManager", ()=>CameraManager);
+var _constants = require("../../../shared/src/constants");
+class CameraManager {
+    constructor(scene){
+        this.scene = scene;
+        this.camera = scene.cameras.main;
+    }
+    setup(originX = 0, originY = 0) {
+        const worldPixelWidth = (0, _constants.WORLD_WIDTH) * (0, _constants.TILE_SIZE);
+        const worldPixelHeight = (0, _constants.WORLD_HEIGHT) * (0, _constants.TILE_SIZE);
+        this.camera.setBounds(originX, originY, worldPixelWidth, worldPixelHeight);
+    }
+    centerOn(x, y) {
+        this.camera.centerOn(x, y);
+    }
+    followTarget(target) {
+        this.camera.centerOn(target.x, target.y);
+    }
+}
+
+},{"../../../shared/src/constants":"5e1U9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}]},["elbaT","gNc1f"], "gNc1f", "parcelRequiree8ef", {})
 
 //# sourceMappingURL=client.0f289648.js.map

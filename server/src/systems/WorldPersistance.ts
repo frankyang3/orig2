@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { WorldMap } from "../schema/World";
 import { WORLD_HEIGHT, WORLD_WIDTH, BLOCK_TYPE, BlockType } from "../../../shared/src/constants";
+import { AUTOSAVE_INTERVAL_MS_DEFAULT, STONE_SPAWN_CHANCE, WOOD_SPAWN_CHANCE } from "../serverConstants";
 
 interface SavedWorldData {
   version: number;
@@ -77,12 +78,12 @@ export class WorldPersistence {
   }
 
   // Start auto-saving at regular intervals
-  startAutoSave(worldMap: WorldMap, intervalMs: number = 60000): void {
+  startAutoSave(worldMap: WorldMap, intervalMs: number = AUTOSAVE_INTERVAL_MS_DEFAULT): void {
     this.stopAutoSave();
     this.autoSaveInterval = setInterval(() => {
       this.save(worldMap);
     }, intervalMs);
-    console.log(`Auto-save enabled every ${intervalMs / 1000} seconds`);
+    console.log(`Auto-save enabled every ${intervalMs / 1000} seconds`); //1000 ms = 1 sec
   }
 
   stopAutoSave(): void {
@@ -101,16 +102,16 @@ export class WorldPersistence {
         // Mostly empty (grass)
         let blockType : BlockType = BLOCK_TYPE.GRASS;
 
-        // Add some random wood blocks (trees) - about 5% chance
-        if (Math.random() < 0.05) {
+        // Add some random wood blocks (trees) - about 5% chance // TODO magic nums
+        if (Math.random() < WOOD_SPAWN_CHANCE) {
           blockType = BLOCK_TYPE.WOOD;
         }
         // Add some random stone blocks - about 3% chance
-        else if (Math.random() < 0.03) {
+        else if (Math.random() < STONE_SPAWN_CHANCE) { // TODO magic nums
           blockType = BLOCK_TYPE.STONE;
         }
 
-        // Create a border of stone
+        // Create a border of stone // TODO maybe not
         if (x === 0 || x === WORLD_WIDTH - 1 || y === 0 || y === WORLD_HEIGHT - 1) {
           blockType = BLOCK_TYPE.STONE;
         }

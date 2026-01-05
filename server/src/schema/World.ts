@@ -2,6 +2,7 @@ import { Schema, ArraySchema, type } from "@colyseus/schema";
 import { Block } from "./Block";
 
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../../../shared/src/constants";
+import { BLOCK_HEALTH } from "../serverConstants";
 
 export class WorldMap extends Schema {
   @type([Block]) blocks = new ArraySchema<Block>();
@@ -39,7 +40,7 @@ export class WorldMap extends Schema {
     const block = this.getBlock(x, y);
     if (!block) return false;
     block.blockType = blockType;
-    block.health = 100; // reset health when block changes
+    block.health = BLOCK_HEALTH; // reset health when block changes // TODO generic health, add more types
     return true;
   }
 

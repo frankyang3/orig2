@@ -1,6 +1,7 @@
 import { WorldMap } from "../schema/World";
 import { WorldPersistence } from "./WorldPersistance";
 import { BLOCK_TYPE, BlockType } from "../../../shared/src/constants";
+import { AUTOSAVE_INTERVAL_MS } from "../serverConstants";
 
 export class WorldSystem {
     private persistence: WorldPersistence;
@@ -13,7 +14,7 @@ export class WorldSystem {
     initialize(): void {
         this.persistence.load(this.worldMap);
         // Auto-save every 60 seconds
-        this.persistence.startAutoSave(this.worldMap, 60000);
+        this.persistence.startAutoSave(this.worldMap, AUTOSAVE_INTERVAL_MS); //TODO magic nums
     }
 
     // Save world immediately (call on room dispose)
