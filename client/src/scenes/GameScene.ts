@@ -1,86 +1,103 @@
 import Phaser from "phaser";
-import { FIXED_TIME_STEP } from "../../../shared/src/constants";
+import { FIXED_TIME_STEP, WORLD_WIDTH } from "../../../shared/src/constants";
 import { InputManager } from "../systems/InputManager";
-import { PlayerManager } from "../systems/PlayerManager";
+import { PlayerRegistryManager } from "../systems/PlayerRegistryManager";
+import { LocalPlayerManager } from "../systems/LocalPlayerManager";
+import { RemotePlayersInterpolator } from "../systems/RemotePlayerInterpolator";
+import { CollisionManager } from "../systems/CollisionManager";
 import { WorldRenderer } from "../systems/WorldRenderer";
 import { CameraManager } from "../systems/CameraManager";
 import { NetworkClient } from "../network/NetworkManager";
 import { ASSETS } from "../clientConstants";
-import { WORLD_WIDTH } from "../../../shared/src/constants";
 
 export class GameScene extends Phaser.Scene {
-  private inputManager!: InputManager;
-  private playerManager!: PlayerManager;
-  private worldRenderer!: WorldRenderer;
-  private cameraManager!: CameraManager;
-  private network!: NetworkClient;
-  private elapsedTime = 0;
+    private inputManager!: InputManager;
+    private playerRegistryManager!: PlayerRegistryManager;
+    private localPlayerManager!: LocalPlayerManager;
+    private remotePlayersInterpolator!: RemotePlayersInterpolator;
+    private collisionManager!: CollisionManager;
+    private worldRenderer!: WorldRenderer;
+    private cameraManager!: CameraManager;
+    private network!: NetworkClient;
+    private elapsedTime = 0;
 
-  preload(): void {
-    this.load.image("ship_0001", ASSETS.SHIP);
+    preload(): void {
+        this.load.image("ship_0001", ASSETS.SHIP);
 
-    this.inputManager = new InputManager(this);
-    this.inputManager.init();
-  }
-
-  async create(): Promise<void> {
-    this.playerManager = new PlayerManager(this);
-    this.worldRenderer = new WorldRenderer(this);
-    this.worldRenderer.initialize();
-
-    this.cameraManager = new CameraManager(this);
-    this.cameraManager.setup();
-
-    this.network = new NetworkClient();
-
-    await this.network.connect({
-      onAdd: (sessionId, x, y, isLocal) => {
-        this.playerManager.addPlayer(sessionId, x, y, isLocal);
-      },
-      onRemove: (sessionId) => {
-        this.playerManager.removePlayer(sessionId);
-      },
-      onLocalUpdate: (x, y) => {
-        this.playerManager.updateRemoteRef(x, y);
-        this.playerManager.onServerUpdate(x, y);
-      },
-      onRemoteUpdate: (sessionId, x, y) => {
-        this.playerManager.setServerPosition(sessionId, x, y);
-      },
-      onWorldInit: (blocks) => {
-        this.worldRenderer.updateAllTiles(blocks);
-        this.playerManager.setWorldData(blocks);
-      },
-      onBlockChange: (x, y, blockType) => {
-        this.worldRenderer.updateTile(x, y, blockType);
-        const index = y * WORLD_WIDTH + x;
-        this.playerManager.updateBlockType(index, blockType);
-      },
-    });
-  }
-
-  update(_time: number, delta: number): void {
-    if (!this.playerManager.hasLocalPlayer()) return;
-
-    this.elapsedTime += delta;
-    while (this.elapsedTime >= FIXED_TIME_STEP) {
-      this.elapsedTime -= FIXED_TIME_STEP;
-      this.fixedTick();
+        this.inputManager = new InputManager(this);
+        this.inputManager.init();
     }
 
-    const localPos = this.playerManager.getLocalPlayerPosition();
-    if (localPos) {
-      this.cameraManager.centerOn(localPos.x, localPos.y);
+    async create(): Promise<void> {
+        this.collisionManager = new CollisionManager();
+        this.playerRegistryManager = new PlayerRegistryManager(this);
+        this.localPlayerManager = new LocalPlayerManager(this, this.collisionManager);
+        this.remotePlayersInterpolator = new RemotePlayersInterpolator();
+
+        this.worldRenderer = new WorldRenderer(this);
+        this.worldRenderer.initialize();
+
+        this.cameraManager = new CameraManager(this);
+        this.cameraManager.setup();
+
+        this.network = new NetworkClient();
+
+        await this.network.connect({
+            onAdd: (sessionId, x, y, isLocal) => {
+                const entity = this.playerRegistryManager.add(sessionId, x, y, isLocal);
+                if (isLocal) {
+                    this.localPlayerManager.initialize(entity, x, y, true);
+                }
+            },
+            onRemove: (sessionId) => {
+                this.playerRegistryManager.remove(sessionId);
+            },
+            onLocalUpdate: (x, y) => {
+                this.localPlayerManager.onServerUpdate(x, y);
+            },
+            onRemoteUpdate: (sessionId, x, y) => {
+                const entity = this.playerRegistryManager.get(sessionId);
+                if (entity) {
+                    this.remotePlayersInterpolator.setTargetPosition(entity, x, y);
+                }
+            },
+            onWorldInit: (blocks) => {
+                this.worldRenderer.updateAllTiles(blocks);
+                this.collisionManager.setWorldData(blocks);
+            },
+            onBlockChange: (x, y, blockType) => {
+                this.worldRenderer.updateTile(x, y, blockType);
+                const index = y * WORLD_WIDTH + x;
+                this.collisionManager.updateBlockType(index, blockType);
+            },
+        });
     }
-  }
 
-  private fixedTick(): void {
-    if (!this.network.isConnected()) return;
+    update(_time: number, delta: number): void {
+        if (!this.localPlayerManager.hasPlayer()) return;
 
-    const input = this.inputManager.getInput();
-    this.network.sendInput(input);
-    this.playerManager.applyInput(input);
-    this.playerManager.reconcileWithServer();
-    this.playerManager.interpolateRemotePlayers();
-  }
+        this.elapsedTime += delta;
+        while (this.elapsedTime >= FIXED_TIME_STEP) {
+            this.elapsedTime -= FIXED_TIME_STEP;
+            this.fixedTick();
+        }
+
+        const localPos = this.localPlayerManager.getPosition();
+        if (localPos) {
+            this.cameraManager.centerOn(localPos.x, localPos.y);
+        }
+    }
+
+    private fixedTick(): void {
+        if (!this.network.isConnected()) return;
+
+        const input = this.inputManager.getInput();
+        this.network.sendInput(input);
+        this.localPlayerManager.applyInput(input);
+        this.localPlayerManager.reconcile();
+
+        for (const entity of this.playerRegistryManager.getRemotePlayers()) {
+            this.remotePlayersInterpolator.interpolate(entity);
+        }
+    }
 }

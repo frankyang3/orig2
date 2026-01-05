@@ -26,9 +26,9 @@ export class CollisionManager {
         for (const corner of corners) {
             const tileX = Math.floor(corner.x / TILE_SIZE);
             const tileY = Math.floor(corner.y / TILE_SIZE);
-            
+
             if (tileX < 0 || tileY < 0) return false;
-            
+
             const index = tileY * WORLD_WIDTH + tileX;
             const block = this.worldBlocks[index];
 
