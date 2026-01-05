@@ -7,6 +7,7 @@ import { RemotePlayersInterpolator } from "../systems/RemotePlayerInterpolator";
 import { CollisionManager } from "../systems/CollisionManager";
 import { WorldRenderer } from "../systems/WorldRenderer";
 import { CameraManager } from "../systems/CameraManager";
+import { EnemyRenderer } from "../systems/EnemyRenderer";
 import { NetworkClient } from "../network/NetworkManager";
 import { ASSETS } from "../clientConstants";
 
@@ -18,6 +19,7 @@ export class GameScene extends Phaser.Scene {
     private collisionManager!: CollisionManager;
     private worldRenderer!: WorldRenderer;
     private cameraManager!: CameraManager;
+    private enemyRenderer!: EnemyRenderer;
     private network!: NetworkClient;
     private elapsedTime = 0;
 
@@ -33,6 +35,7 @@ export class GameScene extends Phaser.Scene {
         this.playerRegistryManager = new PlayerRegistryManager(this);
         this.localPlayerManager = new LocalPlayerManager(this, this.collisionManager);
         this.remotePlayersInterpolator = new RemotePlayersInterpolator();
+        this.enemyRenderer = new EnemyRenderer(this);
 
         this.worldRenderer = new WorldRenderer(this);
         this.worldRenderer.initialize();
@@ -78,6 +81,15 @@ export class GameScene extends Phaser.Scene {
                 const index = y * WORLD_WIDTH + x;
                 this.collisionManager.updateBlockType(index, blockType);
             },
+            onEnemyAdd: (id, enemyType, x, y) => {
+                this.enemyRenderer.add(id, enemyType, x, y);
+            },
+            onEnemyRemove: (id) => {
+                this.enemyRenderer.remove(id);
+            },
+            onEnemyUpdate: (id, x, y) => {
+                this.enemyRenderer.setTargetPosition(id, x, y);
+            },
         });
     }
 
@@ -89,6 +101,9 @@ export class GameScene extends Phaser.Scene {
             this.elapsedTime -= FIXED_TIME_STEP;
             this.fixedTick();
         }
+
+        // Interpolate enemies every frame for smooth movement
+        this.enemyRenderer.interpolateAll();
 
         const localPos = this.localPlayerManager.getPosition();
         if (localPos) {

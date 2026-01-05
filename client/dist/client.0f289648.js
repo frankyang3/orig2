@@ -177871,6 +177871,7 @@ var _remotePlayerInterpolator = require("../systems/RemotePlayerInterpolator");
 var _collisionManager = require("../systems/CollisionManager");
 var _worldRenderer = require("../systems/WorldRenderer");
 var _cameraManager = require("../systems/CameraManager");
+var _enemyRenderer = require("../systems/EnemyRenderer");
 var _networkManager = require("../network/NetworkManager");
 var _clientConstants = require("../clientConstants");
 class GameScene extends (0, _phaserDefault.default).Scene {
@@ -177884,6 +177885,7 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         this.playerRegistryManager = new (0, _playerRegistryManager.PlayerRegistryManager)(this);
         this.localPlayerManager = new (0, _localPlayerManager.LocalPlayerManager)(this, this.collisionManager);
         this.remotePlayersInterpolator = new (0, _remotePlayerInterpolator.RemotePlayersInterpolator)();
+        this.enemyRenderer = new (0, _enemyRenderer.EnemyRenderer)(this);
         this.worldRenderer = new (0, _worldRenderer.WorldRenderer)(this);
         this.worldRenderer.initialize();
         this.cameraManager = new (0, _cameraManager.CameraManager)(this);
@@ -177922,6 +177924,15 @@ class GameScene extends (0, _phaserDefault.default).Scene {
                 this.worldRenderer.updateTile(x, y, blockType);
                 const index = y * (0, _constants.WORLD_WIDTH) + x;
                 this.collisionManager.updateBlockType(index, blockType);
+            },
+            onEnemyAdd: (id, enemyType, x, y)=>{
+                this.enemyRenderer.add(id, enemyType, x, y);
+            },
+            onEnemyRemove: (id)=>{
+                this.enemyRenderer.remove(id);
+            },
+            onEnemyUpdate: (id, x, y)=>{
+                this.enemyRenderer.setTargetPosition(id, x, y);
             }
         });
     }
@@ -177932,6 +177943,8 @@ class GameScene extends (0, _phaserDefault.default).Scene {
             this.elapsedTime -= (0, _constants.FIXED_TIME_STEP);
             this.fixedTick();
         }
+        // Interpolate enemies every frame for smooth movement
+        this.enemyRenderer.interpolateAll();
         const localPos = this.localPlayerManager.getPosition();
         if (localPos) this.cameraManager.centerOn(localPos.x, localPos.y);
     }
@@ -177948,7 +177961,7 @@ class GameScene extends (0, _phaserDefault.default).Scene {
     }
 }
 
-},{"phaser":"9nmdg","../../../shared/src/constants":"5e1U9","../systems/InputManager":"d1Ikp","../systems/WorldRenderer":"jEGNe","../network/NetworkManager":"f1pcv","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","../systems/CameraManager":"l83xX","../systems/CollisionManager":"3XtzM","../systems/PlayerRegistryManager":"hAYvC","../systems/LocalPlayerManager":"fFs6k","../systems/RemotePlayerInterpolator":"hOYcX"}],"5e1U9":[function(require,module,exports,__globalThis) {
+},{"phaser":"9nmdg","../../../shared/src/constants":"5e1U9","../systems/InputManager":"d1Ikp","../systems/PlayerRegistryManager":"hAYvC","../systems/LocalPlayerManager":"fFs6k","../systems/RemotePlayerInterpolator":"hOYcX","../systems/CollisionManager":"3XtzM","../systems/WorldRenderer":"jEGNe","../systems/CameraManager":"l83xX","../network/NetworkManager":"f1pcv","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","../systems/EnemyRenderer":"9M3k1"}],"5e1U9":[function(require,module,exports,__globalThis) {
 // Timing
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
@@ -177962,6 +177975,7 @@ parcelHelpers.export(exports, "MAP_HEIGHT", ()=>MAP_HEIGHT);
 parcelHelpers.export(exports, "WORLD_HEIGHT", ()=>WORLD_HEIGHT);
 parcelHelpers.export(exports, "WORLD_WIDTH", ()=>WORLD_WIDTH);
 parcelHelpers.export(exports, "TILE_SIZE", ()=>TILE_SIZE);
+parcelHelpers.export(exports, "PLAYER_SIZE", ()=>PLAYER_SIZE);
 parcelHelpers.export(exports, "BLOCK_TYPE", ()=>BLOCK_TYPE);
 parcelHelpers.export(exports, "BLOCK_COLORS", ()=>BLOCK_COLORS);
 const TICK_RATE = 60;
@@ -177978,6 +177992,7 @@ const MAP_HEIGHT = 600;
 const WORLD_HEIGHT = 50;
 const WORLD_WIDTH = 50;
 const TILE_SIZE = 32; // pixels MAYBE goes in client
+const PLAYER_SIZE = 32;
 const BLOCK_TYPE = {
     GRASS: 0,
     WOOD: 1,
@@ -178061,7 +178076,240 @@ function createInputPayload() {
     };
 }
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"jEGNe":[function(require,module,exports,__globalThis) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"hAYvC":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "PlayerRegistryManager", ()=>PlayerRegistryManager);
+class PlayerRegistryManager {
+    constructor(scene){
+        this.scene = scene;
+        this.entities = new Map();
+    }
+    add(sessionId, x, y, isLocal = false) {
+        const entity = this.scene.physics.add.image(x, y, "ship_0001");
+        this.entities.set(sessionId, entity);
+        if (isLocal) this.localSessionId = sessionId;
+        return entity;
+    }
+    remove(sessionId) {
+        const entity = this.entities.get(sessionId);
+        if (entity) {
+            entity.destroy();
+            this.entities.delete(sessionId);
+        }
+    }
+    get(sessionId) {
+        return this.entities.get(sessionId);
+    }
+    getRemotePlayers() {
+        const remote = [];
+        for (const [sessionId, entity] of this.entities)if (sessionId !== this.localSessionId) remote.push(entity);
+        return remote;
+    }
+}
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"fFs6k":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "LocalPlayerManager", ()=>LocalPlayerManager);
+var _constants = require("../../../shared/src/constants");
+var _clientConstants = require("../clientConstants");
+class LocalPlayerManager {
+    constructor(scene, collisionManager){
+        this.scene = scene;
+        this.collisionManager = collisionManager;
+        this.serverX = 0;
+        this.serverY = 0;
+    }
+    initialize(entity, x, y, debug = false) {
+        this.entity = entity;
+        this.serverX = x;
+        this.serverY = y;
+        if (debug) {
+            this.debugRef = this.scene.add.rectangle(0, 0, entity.width, entity.height);
+            this.debugRef.setStrokeStyle(1, 0xff0000);
+        }
+    }
+    applyInput(input) {
+        if (!this.entity) return;
+        const currentX = this.entity.x;
+        const currentY = this.entity.y;
+        let newX = currentX;
+        let newY = currentY;
+        if (input.left) newX -= (0, _constants.PLAYER_VELOCITY);
+        if (input.right) newX += (0, _constants.PLAYER_VELOCITY);
+        if (input.up) newY -= (0, _constants.PLAYER_VELOCITY);
+        if (input.down) newY += (0, _constants.PLAYER_VELOCITY);
+        if (this.collisionManager.canMoveTo(newX, newY)) {
+            this.entity.x = newX;
+            this.entity.y = newY;
+        } else {
+            if (this.collisionManager.canMoveTo(newX, currentY)) this.entity.x = newX;
+            if (this.collisionManager.canMoveTo(this.entity.x, newY)) this.entity.y = newY;
+        }
+    }
+    onServerUpdate(x, y) {
+        this.serverX = x;
+        this.serverY = y;
+        if (this.debugRef) {
+            this.debugRef.x = x;
+            this.debugRef.y = y;
+        }
+    }
+    reconcile() {
+        if (!this.entity) return;
+        const dx = this.serverX - this.entity.x;
+        const dy = this.serverY - this.entity.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance > (0, _clientConstants.SNAP_THRESHOLD)) {
+            console.log(`Snapping to server position (distance: ${distance.toFixed(1)})`);
+            this.entity.x = this.serverX;
+            this.entity.y = this.serverY;
+        } else if (distance > (0, _clientConstants.CORRECTION_THRESHOLD)) {
+            this.entity.x += dx * (0, _clientConstants.CORRECTION_SPEED);
+            this.entity.y += dy * (0, _clientConstants.CORRECTION_SPEED);
+        }
+    }
+    hasPlayer() {
+        return !!this.entity;
+    }
+    getPosition() {
+        if (!this.entity) return null;
+        return {
+            x: this.entity.x,
+            y: this.entity.y
+        };
+    }
+}
+
+},{"../../../shared/src/constants":"5e1U9","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"fGjaF":[function(require,module,exports,__globalThis) {
+/**
+ * Constants for client config
+ */ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "SERVER_URL", ()=>SERVER_URL);
+parcelHelpers.export(exports, "INTERPOLATION_SPEED", ()=>INTERPOLATION_SPEED);
+parcelHelpers.export(exports, "BACKGROUND_DEPTH_LAYER", ()=>BACKGROUND_DEPTH_LAYER);
+parcelHelpers.export(exports, "ASSETS", ()=>ASSETS);
+parcelHelpers.export(exports, "DISPLAY", ()=>DISPLAY);
+parcelHelpers.export(exports, "TILE_STROKE_STYLE", ()=>TILE_STROKE_STYLE);
+parcelHelpers.export(exports, "SNAP_THRESHOLD", ()=>SNAP_THRESHOLD);
+parcelHelpers.export(exports, "CORRECTION_THRESHOLD", ()=>CORRECTION_THRESHOLD);
+parcelHelpers.export(exports, "CORRECTION_SPEED", ()=>CORRECTION_SPEED);
+const SERVER_URL = "ws://localhost:2567";
+const INTERPOLATION_SPEED = 0.3;
+const BACKGROUND_DEPTH_LAYER = -1;
+const ASSETS = {
+    SHIP: "https://cdn.glitch.global/3e033dcd-d5be-4db4-99e8-086ae90969ec/ship_0001.png"
+};
+const DISPLAY = {
+    WIDTH: 800,
+    HEIGHT: 600,
+    BACKGROUND: "#b6d53c"
+};
+const TILE_STROKE_STYLE = {
+    WIDTH: 1,
+    COLOR: 0x000000,
+    ALPHA: 0.2
+};
+const SNAP_THRESHOLD = 50; // If off by more than this, snap immediately
+const CORRECTION_THRESHOLD = 2; // If off by more than this, start correcting
+const CORRECTION_SPEED = 0.2; // How fast to correct (0-1)
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"hOYcX":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "RemotePlayersInterpolator", ()=>RemotePlayersInterpolator);
+var _phaser = require("phaser");
+var _phaserDefault = parcelHelpers.interopDefault(_phaser);
+var _clientConstants = require("../clientConstants");
+const SERVER_X = "serverX";
+const SERVER_Y = "serverY";
+class RemotePlayersInterpolator {
+    setTargetPosition(entity, x, y) {
+        entity.setData(SERVER_X, x);
+        entity.setData(SERVER_Y, y);
+    }
+    interpolate(entity) {
+        const serverX = entity.getData(SERVER_X);
+        const serverY = entity.getData(SERVER_Y);
+        if (serverX !== undefined && serverY !== undefined) {
+            entity.x = (0, _phaserDefault.default).Math.Linear(entity.x, serverX, (0, _clientConstants.INTERPOLATION_SPEED));
+            entity.y = (0, _phaserDefault.default).Math.Linear(entity.y, serverY, (0, _clientConstants.INTERPOLATION_SPEED));
+        }
+    }
+}
+
+},{"phaser":"9nmdg","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"3XtzM":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "CollisionManager", ()=>CollisionManager);
+var _constants = require("../../../shared/src/constants");
+class CollisionManager {
+    setWorldData(blocks) {
+        this.worldBlocks = blocks;
+    }
+    setLocalPlayerId(id) {
+        this.localPlayerId = id;
+    }
+    updatePlayerPosition(id, x, y) {
+        this.playerPositions.set(id, {
+            x,
+            y
+        });
+    }
+    removePlayer(id) {
+        this.playerPositions.delete(id);
+    }
+    updateBlockType(index, blockType) {
+        if (this.worldBlocks && index < this.worldBlocks.length) this.worldBlocks[index].blockType = blockType;
+    }
+    canMoveTo(x, y, playerSize = (0, _constants.PLAYER_SIZE) / 2) {
+        if (!this.worldBlocks) return true;
+        // Check world collision
+        const corners = [
+            {
+                x: x - playerSize,
+                y: y - playerSize
+            },
+            {
+                x: x + playerSize,
+                y: y - playerSize
+            },
+            {
+                x: x - playerSize,
+                y: y + playerSize
+            },
+            {
+                x: x + playerSize,
+                y: y + playerSize
+            }
+        ];
+        for (const corner of corners){
+            const tileX = Math.floor(corner.x / (0, _constants.TILE_SIZE));
+            const tileY = Math.floor(corner.y / (0, _constants.TILE_SIZE));
+            if (tileX < 0 || tileY < 0) return false;
+            const index = tileY * (0, _constants.WORLD_WIDTH) + tileX;
+            const block = this.worldBlocks[index];
+            if (block && block.blockType !== (0, _constants.BLOCK_TYPE).GRASS) return false;
+        }
+        // Check player collision
+        for (const [playerId, playerPos] of this.playerPositions){
+            if (playerId === this.localPlayerId) continue; // Skip self
+            const dx = x - playerPos.x;
+            const dy = y - playerPos.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const minDistance = playerSize * 2; // Both players have same size
+            if (distance < minDistance) return false;
+        }
+        return true;
+    }
+    constructor(){
+        this.playerPositions = new Map();
+    }
+}
+
+},{"../../../shared/src/constants":"5e1U9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"jEGNe":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "WorldRenderer", ()=>WorldRenderer);
@@ -178118,41 +178366,30 @@ class WorldRenderer {
     }
 }
 
-},{"../../../shared/src/constants":"5e1U9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","../clientConstants":"fGjaF"}],"fGjaF":[function(require,module,exports,__globalThis) {
-/**
- * Constants for client config
- */ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+},{"../../../shared/src/constants":"5e1U9","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"l83xX":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "SERVER_URL", ()=>SERVER_URL);
-parcelHelpers.export(exports, "INTERPOLATION_SPEED", ()=>INTERPOLATION_SPEED);
-parcelHelpers.export(exports, "BACKGROUND_DEPTH_LAYER", ()=>BACKGROUND_DEPTH_LAYER);
-parcelHelpers.export(exports, "ASSETS", ()=>ASSETS);
-parcelHelpers.export(exports, "DISPLAY", ()=>DISPLAY);
-parcelHelpers.export(exports, "TILE_STROKE_STYLE", ()=>TILE_STROKE_STYLE);
-parcelHelpers.export(exports, "SNAP_THRESHOLD", ()=>SNAP_THRESHOLD);
-parcelHelpers.export(exports, "CORRECTION_THRESHOLD", ()=>CORRECTION_THRESHOLD);
-parcelHelpers.export(exports, "CORRECTION_SPEED", ()=>CORRECTION_SPEED);
-const SERVER_URL = "ws://localhost:2567";
-const INTERPOLATION_SPEED = 0.3;
-const BACKGROUND_DEPTH_LAYER = -1;
-const ASSETS = {
-    SHIP: "https://cdn.glitch.global/3e033dcd-d5be-4db4-99e8-086ae90969ec/ship_0001.png"
-};
-const DISPLAY = {
-    WIDTH: 800,
-    HEIGHT: 600,
-    BACKGROUND: "#b6d53c"
-};
-const TILE_STROKE_STYLE = {
-    WIDTH: 1,
-    COLOR: 0x000000,
-    ALPHA: 0.2
-};
-const SNAP_THRESHOLD = 50; // If off by more than this, snap immediately
-const CORRECTION_THRESHOLD = 2; // If off by more than this, start correcting
-const CORRECTION_SPEED = 0.2; // How fast to correct (0-1)
+parcelHelpers.export(exports, "CameraManager", ()=>CameraManager);
+var _constants = require("../../../shared/src/constants");
+class CameraManager {
+    constructor(scene){
+        this.scene = scene;
+        this.camera = scene.cameras.main;
+    }
+    setup(originX = 0, originY = 0) {
+        const worldPixelWidth = (0, _constants.WORLD_WIDTH) * (0, _constants.TILE_SIZE);
+        const worldPixelHeight = (0, _constants.WORLD_HEIGHT) * (0, _constants.TILE_SIZE);
+        this.camera.setBounds(originX, originY, worldPixelWidth, worldPixelHeight);
+    }
+    centerOn(x, y) {
+        this.camera.centerOn(x, y);
+    }
+    followTarget(target) {
+        this.camera.centerOn(target.x, target.y);
+    }
+}
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"f1pcv":[function(require,module,exports,__globalThis) {
+},{"../../../shared/src/constants":"5e1U9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"f1pcv":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "NetworkClient", ()=>NetworkClient);
@@ -178164,7 +178401,6 @@ class NetworkClient {
         try {
             this.room = await this.client.joinOrCreate((0, _constants.ROOM_NAME));
             console.log("Joined room:", this.room.sessionId);
-            // Wait for state to be ready
             this.room.onStateChange.once((state)=>{
                 console.log("State ready:", state);
                 this.setupCallbacks(callbacks);
@@ -178178,48 +178414,57 @@ class NetworkClient {
         if (!this.room) return;
         const $ = (0, _colyseusJs.getStateCallbacks)(this.room);
         const state = this.room.state;
-        // Debug: see what's in the state
         console.log("State:", state);
         console.log("State.worldMap:", state.worldMap);
         console.log("State.players:", state.players);
-        //Player Callbacks
-        // When player joins
+        console.log("State.enemies:", state.enemies);
+        // Player callbacks
         $(state).players.onAdd((player, sessionId)=>{
             const isLocal = sessionId === this.room.sessionId;
             callbacks.onAdd(sessionId, player.x, player.y, isLocal);
-            // subscribe to changes in each player (local vs. remote)
             $(player).onChange(()=>{
                 if (isLocal) callbacks.onLocalUpdate(player.x, player.y);
                 else callbacks.onRemoteUpdate(sessionId, player.x, player.y);
             });
         });
-        // any player disconnects
         $(state).players.onRemove((_, sessionId)=>{
             callbacks.onRemove(sessionId);
         });
         // World callbacks
         const blocksArray = [];
         let initialized = false;
-        // when any block is added (should happen in bulk on join)
         $(state).worldMap.blocks.onAdd((block, index)=>{
             blocksArray[index] = {
                 blockType: block.blockType
             };
-            // Listen for changes to this block
             $(block).onChange(()=>{
                 const x = index % (0, _constants.WORLD_WIDTH);
                 const y = Math.floor(index / (0, _constants.WORLD_WIDTH));
                 callbacks.onBlockChange(x, y, block.blockType);
             });
-            // Check if all blocks have been added
             if (!initialized && blocksArray.length === state.worldMap.blocks.length) {
                 initialized = true;
                 callbacks.onWorldInit(blocksArray);
             }
         });
+        // Enemy callbacks
+        $(state).enemies.onAdd((enemy, id)=>{
+            console.log(`Enemy added: ${id} (${enemy.enemyType}) at (${enemy.x}, ${enemy.y})`);
+            callbacks.onEnemyAdd(id, enemy.enemyType, enemy.x, enemy.y);
+            $(enemy).onChange(()=>{
+                callbacks.onEnemyUpdate(id, enemy.x, enemy.y);
+            });
+        });
+        $(state).enemies.onRemove((_, id)=>{
+            console.log(`Enemy removed: ${id}`);
+            callbacks.onEnemyRemove(id);
+        });
     }
     sendInput(input) {
         this.room?.send((0, _constants.MESSAGE_TYPES).INPUT, input);
+    }
+    getSessionId() {
+        return this.room?.sessionId;
     }
     isConnected() {
         return !!this.room;
@@ -187687,225 +187932,80 @@ exports.write = function(buffer, value, offset, isLE, mLen, nBytes) {
     buffer[offset + i - d] |= s * 128;
 };
 
-},{}],"l83xX":[function(require,module,exports,__globalThis) {
+},{}],"9M3k1":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "CameraManager", ()=>CameraManager);
-var _constants = require("../../../shared/src/constants");
-class CameraManager {
-    constructor(scene){
-        this.scene = scene;
-        this.camera = scene.cameras.main;
-    }
-    setup(originX = 0, originY = 0) {
-        const worldPixelWidth = (0, _constants.WORLD_WIDTH) * (0, _constants.TILE_SIZE);
-        const worldPixelHeight = (0, _constants.WORLD_HEIGHT) * (0, _constants.TILE_SIZE);
-        this.camera.setBounds(originX, originY, worldPixelWidth, worldPixelHeight);
-    }
-    centerOn(x, y) {
-        this.camera.centerOn(x, y);
-    }
-    followTarget(target) {
-        this.camera.centerOn(target.x, target.y);
-    }
-}
-
-},{"../../../shared/src/constants":"5e1U9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"3XtzM":[function(require,module,exports,__globalThis) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "CollisionManager", ()=>CollisionManager);
-var _constants = require("../../../shared/src/constants");
-class CollisionManager {
-    setWorldData(blocks) {
-        this.worldBlocks = blocks;
-    }
-    setLocalPlayerId(id) {
-        this.localPlayerId = id;
-    }
-    updatePlayerPosition(id, x, y) {
-        this.playerPositions.set(id, {
-            x,
-            y
-        });
-    }
-    removePlayer(id) {
-        this.playerPositions.delete(id);
-    }
-    updateBlockType(index, blockType) {
-        if (this.worldBlocks && index < this.worldBlocks.length) this.worldBlocks[index].blockType = blockType;
-    }
-    canMoveTo(x, y, playerSize = PLAYER_SIZE / 2) {
-        if (!this.worldBlocks) return true;
-        // Check world collision
-        const corners = [
-            {
-                x: x - playerSize,
-                y: y - playerSize
-            },
-            {
-                x: x + playerSize,
-                y: y - playerSize
-            },
-            {
-                x: x - playerSize,
-                y: y + playerSize
-            },
-            {
-                x: x + playerSize,
-                y: y + playerSize
-            }
-        ];
-        for (const corner of corners){
-            const tileX = Math.floor(corner.x / (0, _constants.TILE_SIZE));
-            const tileY = Math.floor(corner.y / (0, _constants.TILE_SIZE));
-            if (tileX < 0 || tileY < 0) return false;
-            const index = tileY * (0, _constants.WORLD_WIDTH) + tileX;
-            const block = this.worldBlocks[index];
-            if (block && block.blockType !== (0, _constants.BLOCK_TYPE).GRASS) return false;
-        }
-        // Check player collision
-        for (const [playerId, playerPos] of this.playerPositions){
-            if (playerId === this.localPlayerId) continue; // Skip self
-            const dx = x - playerPos.x;
-            const dy = y - playerPos.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const minDistance = playerSize * 2; // Both players have same size
-            if (distance < minDistance) return false;
-        }
-        return true;
-    }
-    constructor(){
-        this.playerPositions = new Map();
-    }
-}
-
-},{"../../../shared/src/constants":"5e1U9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"hAYvC":[function(require,module,exports,__globalThis) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "PlayerRegistryManager", ()=>PlayerRegistryManager);
-class PlayerRegistryManager {
-    constructor(scene){
-        this.scene = scene;
-        this.entities = new Map();
-    }
-    add(sessionId, x, y, isLocal = false) {
-        const entity = this.scene.physics.add.image(x, y, "ship_0001");
-        this.entities.set(sessionId, entity);
-        if (isLocal) this.localSessionId = sessionId;
-        return entity;
-    }
-    remove(sessionId) {
-        const entity = this.entities.get(sessionId);
-        if (entity) {
-            entity.destroy();
-            this.entities.delete(sessionId);
-        }
-    }
-    get(sessionId) {
-        return this.entities.get(sessionId);
-    }
-    getRemotePlayers() {
-        const remote = [];
-        for (const [sessionId, entity] of this.entities)if (sessionId !== this.localSessionId) remote.push(entity);
-        return remote;
-    }
-}
-
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"fFs6k":[function(require,module,exports,__globalThis) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "LocalPlayerManager", ()=>LocalPlayerManager);
-var _constants = require("../../../shared/src/constants");
-var _clientConstants = require("../clientConstants");
-class LocalPlayerManager {
-    constructor(scene, collisionManager){
-        this.scene = scene;
-        this.collisionManager = collisionManager;
-        this.serverX = 0;
-        this.serverY = 0;
-    }
-    initialize(entity, x, y, debug = false) {
-        this.entity = entity;
-        this.serverX = x;
-        this.serverY = y;
-        if (debug) {
-            this.debugRef = this.scene.add.rectangle(0, 0, entity.width, entity.height);
-            this.debugRef.setStrokeStyle(1, 0xff0000);
-        }
-    }
-    applyInput(input) {
-        if (!this.entity) return;
-        const currentX = this.entity.x;
-        const currentY = this.entity.y;
-        let newX = currentX;
-        let newY = currentY;
-        if (input.left) newX -= (0, _constants.PLAYER_VELOCITY);
-        if (input.right) newX += (0, _constants.PLAYER_VELOCITY);
-        if (input.up) newY -= (0, _constants.PLAYER_VELOCITY);
-        if (input.down) newY += (0, _constants.PLAYER_VELOCITY);
-        if (this.collisionManager.canMoveTo(newX, newY)) {
-            this.entity.x = newX;
-            this.entity.y = newY;
-        } else {
-            if (this.collisionManager.canMoveTo(newX, currentY)) this.entity.x = newX;
-            if (this.collisionManager.canMoveTo(this.entity.x, newY)) this.entity.y = newY;
-        }
-    }
-    onServerUpdate(x, y) {
-        this.serverX = x;
-        this.serverY = y;
-        if (this.debugRef) {
-            this.debugRef.x = x;
-            this.debugRef.y = y;
-        }
-    }
-    reconcile() {
-        if (!this.entity) return;
-        const dx = this.serverX - this.entity.x;
-        const dy = this.serverY - this.entity.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance > (0, _clientConstants.SNAP_THRESHOLD)) {
-            console.log(`Snapping to server position (distance: ${distance.toFixed(1)})`);
-            this.entity.x = this.serverX;
-            this.entity.y = this.serverY;
-        } else if (distance > (0, _clientConstants.CORRECTION_THRESHOLD)) {
-            this.entity.x += dx * (0, _clientConstants.CORRECTION_SPEED);
-            this.entity.y += dy * (0, _clientConstants.CORRECTION_SPEED);
-        }
-    }
-    hasPlayer() {
-        return !!this.entity;
-    }
-    getPosition() {
-        if (!this.entity) return null;
-        return {
-            x: this.entity.x,
-            y: this.entity.y
-        };
-    }
-}
-
-},{"../../../shared/src/constants":"5e1U9","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"hOYcX":[function(require,module,exports,__globalThis) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "RemotePlayersInterpolator", ()=>RemotePlayersInterpolator);
+parcelHelpers.export(exports, "EnemyRenderer", ()=>EnemyRenderer);
 var _phaser = require("phaser");
 var _phaserDefault = parcelHelpers.interopDefault(_phaser);
 var _clientConstants = require("../clientConstants");
 const SERVER_X = "serverX";
 const SERVER_Y = "serverY";
-class RemotePlayersInterpolator {
-    setTargetPosition(entity, x, y) {
-        entity.setData(SERVER_X, x);
-        entity.setData(SERVER_Y, y);
+const ENEMY_COLORS = {
+    slime: 0x44ff44,
+    skeleton: 0xcccccc,
+    bat: 0x8844aa
+};
+const ENEMY_SIZES = {
+    slime: 14,
+    skeleton: 15,
+    bat: 10
+};
+class EnemyRenderer {
+    constructor(scene){
+        this.enemies = new Map();
+        this.scene = scene;
     }
-    interpolate(entity) {
-        const serverX = entity.getData(SERVER_X);
-        const serverY = entity.getData(SERVER_Y);
-        if (serverX !== undefined && serverY !== undefined) {
-            entity.x = (0, _phaserDefault.default).Math.Linear(entity.x, serverX, (0, _clientConstants.INTERPOLATION_SPEED));
-            entity.y = (0, _phaserDefault.default).Math.Linear(entity.y, serverY, (0, _clientConstants.INTERPOLATION_SPEED));
+    add(id, enemyType, x, y) {
+        if (this.enemies.has(id)) return;
+        const color = ENEMY_COLORS[enemyType] ?? 0xff0000;
+        const radius = ENEMY_SIZES[enemyType] ?? 12;
+        const sprite = this.scene.add.circle(x, y, radius, color);
+        sprite.setStrokeStyle(2, 0x000000);
+        sprite.setDepth(5);
+        sprite.setData(SERVER_X, x);
+        sprite.setData(SERVER_Y, y);
+        // Optional: add enemy type label for debugging
+        // const label = this.scene.add.text(x, y - radius - 10, enemyType, {
+        //     fontSize: '10px',
+        //     color: '#ffffff',
+        // }).setOrigin(0.5).setDepth(6);
+        this.enemies.set(id, {
+            sprite
+        });
+    }
+    remove(id) {
+        const enemy = this.enemies.get(id);
+        if (enemy) {
+            enemy.sprite.destroy();
+            enemy.label?.destroy();
+            this.enemies.delete(id);
         }
+    }
+    setTargetPosition(id, x, y) {
+        const enemy = this.enemies.get(id);
+        if (enemy) {
+            enemy.sprite.setData(SERVER_X, x);
+            enemy.sprite.setData(SERVER_Y, y);
+        }
+    }
+    interpolateAll() {
+        for (const [, enemy] of this.enemies){
+            const serverX = enemy.sprite.getData(SERVER_X);
+            const serverY = enemy.sprite.getData(SERVER_Y);
+            if (serverX !== undefined && serverY !== undefined) {
+                enemy.sprite.x = (0, _phaserDefault.default).Math.Linear(enemy.sprite.x, serverX, (0, _clientConstants.INTERPOLATION_SPEED));
+                enemy.sprite.y = (0, _phaserDefault.default).Math.Linear(enemy.sprite.y, serverY, (0, _clientConstants.INTERPOLATION_SPEED));
+                // Update label position if present
+                if (enemy.label) {
+                    enemy.label.x = enemy.sprite.x;
+                    enemy.label.y = enemy.sprite.y - (enemy.sprite.radius ?? 12) - 10;
+                }
+            }
+        }
+    }
+    clear() {
+        for (const [id] of this.enemies)this.remove(id);
     }
 }
 
