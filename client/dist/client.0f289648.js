@@ -177892,17 +177892,27 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         await this.network.connect({
             onAdd: (sessionId, x, y, isLocal)=>{
                 const entity = this.playerRegistryManager.add(sessionId, x, y, isLocal);
-                if (isLocal) this.localPlayerManager.initialize(entity, x, y, true);
+                if (isLocal) {
+                    this.localPlayerManager.initialize(entity, x, y, true);
+                    this.collisionManager.setLocalPlayerId(sessionId);
+                }
+                this.collisionManager.updatePlayerPosition(sessionId, x, y);
             },
             onRemove: (sessionId)=>{
                 this.playerRegistryManager.remove(sessionId);
+                this.collisionManager.removePlayer(sessionId);
             },
             onLocalUpdate: (x, y)=>{
                 this.localPlayerManager.onServerUpdate(x, y);
+                const localSessionId = this.network.getSessionId();
+                if (localSessionId) this.collisionManager.updatePlayerPosition(localSessionId, x, y);
             },
             onRemoteUpdate: (sessionId, x, y)=>{
                 const entity = this.playerRegistryManager.get(sessionId);
-                if (entity) this.remotePlayersInterpolator.setTargetPosition(entity, x, y);
+                if (entity) {
+                    this.remotePlayersInterpolator.setTargetPosition(entity, x, y);
+                    this.collisionManager.updatePlayerPosition(sessionId, x, y);
+                }
             },
             onWorldInit: (blocks)=>{
                 this.worldRenderer.updateAllTiles(blocks);
@@ -187709,11 +187719,24 @@ class CollisionManager {
     setWorldData(blocks) {
         this.worldBlocks = blocks;
     }
+    setLocalPlayerId(id) {
+        this.localPlayerId = id;
+    }
+    updatePlayerPosition(id, x, y) {
+        this.playerPositions.set(id, {
+            x,
+            y
+        });
+    }
+    removePlayer(id) {
+        this.playerPositions.delete(id);
+    }
     updateBlockType(index, blockType) {
         if (this.worldBlocks && index < this.worldBlocks.length) this.worldBlocks[index].blockType = blockType;
     }
     canMoveTo(x, y, playerSize = 16) {
         if (!this.worldBlocks) return true;
+        // Check world collision
         const corners = [
             {
                 x: x - playerSize,
@@ -187740,7 +187763,19 @@ class CollisionManager {
             const block = this.worldBlocks[index];
             if (block && block.blockType !== (0, _constants.BLOCK_TYPE).GRASS) return false;
         }
+        // Check player collision
+        for (const [playerId, playerPos] of this.playerPositions){
+            if (playerId === this.localPlayerId) continue; // Skip self
+            const dx = x - playerPos.x;
+            const dy = y - playerPos.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const minDistance = playerSize * 2; // Both players have same size
+            if (distance < minDistance) return false;
+        }
         return true;
+    }
+    constructor(){
+        this.playerPositions = new Map();
     }
 }
 

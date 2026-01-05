@@ -47,18 +47,26 @@ export class GameScene extends Phaser.Scene {
                 const entity = this.playerRegistryManager.add(sessionId, x, y, isLocal);
                 if (isLocal) {
                     this.localPlayerManager.initialize(entity, x, y, true);
+                    this.collisionManager.setLocalPlayerId(sessionId);
                 }
+                this.collisionManager.updatePlayerPosition(sessionId, x, y);
             },
             onRemove: (sessionId) => {
                 this.playerRegistryManager.remove(sessionId);
+                this.collisionManager.removePlayer(sessionId);
             },
             onLocalUpdate: (x, y) => {
                 this.localPlayerManager.onServerUpdate(x, y);
+                const localSessionId = this.network.getSessionId();
+                if (localSessionId) {
+                    this.collisionManager.updatePlayerPosition(localSessionId, x, y);
+                }
             },
             onRemoteUpdate: (sessionId, x, y) => {
                 const entity = this.playerRegistryManager.get(sessionId);
                 if (entity) {
                     this.remotePlayersInterpolator.setTargetPosition(entity, x, y);
+                    this.collisionManager.updatePlayerPosition(sessionId, x, y);
                 }
             },
             onWorldInit: (blocks) => {
