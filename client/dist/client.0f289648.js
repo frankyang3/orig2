@@ -177873,6 +177873,7 @@ var _worldRenderer = require("../systems/WorldRenderer");
 var _cameraManager = require("../systems/CameraManager");
 var _enemyRenderer = require("../systems/EnemyRenderer");
 var _healthBarRenderer = require("../systems/HealthBarRenderer");
+var _playerHUD = require("../systems/PlayerHUD");
 var _networkManager = require("../network/NetworkManager");
 var _clientConstants = require("../clientConstants");
 class GameScene extends (0, _phaserDefault.default).Scene {
@@ -177892,6 +177893,9 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         this.worldRenderer.initialize();
         this.cameraManager = new (0, _cameraManager.CameraManager)(this);
         this.cameraManager.setup();
+        // Create HUD after camera setup
+        this.playerHUD = new (0, _playerHUD.PlayerHUD)(this);
+        this.playerHUD.create();
         this.network = new (0, _networkManager.NetworkClient)();
         await this.network.connect({
             // Player callbacks
@@ -177902,8 +177906,7 @@ class GameScene extends (0, _phaserDefault.default).Scene {
                     this.collisionManager.setLocalPlayerId(sessionId);
                     this.localHealth = health;
                     this.localMaxHealth = maxHealth;
-                    // Emit initial health update event to UI scene
-                    this.events.emit('updateHealth', health, maxHealth);
+                    this.playerHUD.updateHealth(health, maxHealth);
                 }
                 this.collisionManager.updatePlayerPosition(sessionId, x, y);
                 this.playerHealthBars.add(sessionId, x, y, health, maxHealth);
@@ -177917,6 +177920,7 @@ class GameScene extends (0, _phaserDefault.default).Scene {
                 this.localPlayerManager.onServerUpdate(x, y);
                 this.localHealth = health;
                 this.localMaxHealth = maxHealth;
+                this.playerHUD.updateHealth(health, maxHealth);
                 const localSessionId = this.network.getSessionId();
                 if (localSessionId) this.collisionManager.updatePlayerPosition(localSessionId, x, y);
             },
@@ -177980,7 +177984,7 @@ class GameScene extends (0, _phaserDefault.default).Scene {
     }
 }
 
-},{"phaser":"9nmdg","../../../shared/src/constants":"5e1U9","../systems/InputManager":"d1Ikp","../systems/PlayerRegistryManager":"hAYvC","../systems/LocalPlayerManager":"fFs6k","../systems/RemotePlayerInterpolator":"hOYcX","../systems/CollisionManager":"3XtzM","../systems/WorldRenderer":"jEGNe","../systems/CameraManager":"l83xX","../network/NetworkManager":"f1pcv","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","../systems/EnemyRenderer":"9M3k1","../systems/HealthBarRenderer":"lw85I"}],"5e1U9":[function(require,module,exports,__globalThis) {
+},{"phaser":"9nmdg","../../../shared/src/constants":"5e1U9","../systems/InputManager":"d1Ikp","../systems/PlayerRegistryManager":"hAYvC","../systems/LocalPlayerManager":"fFs6k","../systems/RemotePlayerInterpolator":"hOYcX","../systems/CollisionManager":"3XtzM","../systems/WorldRenderer":"jEGNe","../systems/CameraManager":"l83xX","../network/NetworkManager":"f1pcv","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","../systems/EnemyRenderer":"9M3k1","../systems/HealthBarRenderer":"lw85I","../systems/PlayerHUD":"fqFBQ"}],"5e1U9":[function(require,module,exports,__globalThis) {
 // Timing
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
@@ -188108,6 +188112,56 @@ class HealthBarRenderer {
     }
     clear() {
         for (const [id] of this.healthBars)this.remove(id);
+    }
+}
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"fqFBQ":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "PlayerHUD", ()=>PlayerHUD);
+class PlayerHUD {
+    constructor(scene){
+        this.barWidth = 200;
+        this.barHeight = 20;
+        this.padding = 20;
+        this.depth = 1000;
+        this.scene = scene;
+    }
+    create() {
+        // Background (dark gray)
+        this.healthBarBackground = this.scene.add.rectangle(this.padding + this.barWidth / 2, this.padding + this.barHeight / 2, this.barWidth, this.barHeight, 0x333333);
+        this.healthBarBackground.setScrollFactor(0);
+        this.healthBarBackground.setDepth(this.depth);
+        // Health fill (green, left-aligned)
+        this.healthBarFill = this.scene.add.rectangle(this.padding, this.padding + this.barHeight / 2, this.barWidth, this.barHeight, 0x44ff44);
+        this.healthBarFill.setOrigin(0, 0.5);
+        this.healthBarFill.setScrollFactor(0);
+        this.healthBarFill.setDepth(this.depth + 1);
+        // Border
+        this.healthBarBorder = this.scene.add.rectangle(this.padding + this.barWidth / 2, this.padding + this.barHeight / 2, this.barWidth, this.barHeight);
+        this.healthBarBorder.setStrokeStyle(2, 0x000000);
+        this.healthBarBorder.setFillStyle();
+        this.healthBarBorder.setScrollFactor(0);
+        this.healthBarBorder.setDepth(this.depth + 2);
+        // Health text centered on bar
+        this.healthText = this.scene.add.text(this.padding + this.barWidth / 2, this.padding + this.barHeight / 2, "100 / 100", {
+            fontSize: "14px",
+            color: "#ffffff",
+            fontStyle: "bold"
+        });
+        this.healthText.setOrigin(0.5, 0.5);
+        this.healthText.setScrollFactor(0);
+        this.healthText.setDepth(this.depth + 3);
+    }
+    updateHealth(health, maxHealth) {
+        const healthPercent = Math.max(0, Math.min(1, health / maxHealth));
+        const fillWidth = this.barWidth * healthPercent;
+        this.healthBarFill.width = fillWidth;
+        // Change color based on health percentage
+        if (healthPercent > 0.3) this.healthBarFill.setFillStyle(0x44ff44); // Green
+        else this.healthBarFill.setFillStyle(0xff4444); // Red
+        // Update text
+        this.healthText.setText(`${Math.ceil(health)} / ${maxHealth}`);
     }
 }
 

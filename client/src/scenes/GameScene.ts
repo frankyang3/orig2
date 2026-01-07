@@ -9,6 +9,7 @@ import { WorldRenderer } from "../systems/WorldRenderer";
 import { CameraManager } from "../systems/CameraManager";
 import { EnemyRenderer } from "../systems/EnemyRenderer";
 import { HealthBarRenderer } from "../systems/HealthBarRenderer";
+import { PlayerHUD } from "../systems/PlayerHUD";
 import { NetworkClient } from "../network/NetworkManager";
 import { ASSETS } from "../clientConstants";
 
@@ -22,6 +23,7 @@ export class GameScene extends Phaser.Scene {
     private cameraManager!: CameraManager;
     private enemyRenderer!: EnemyRenderer;
     private playerHealthBars!: HealthBarRenderer;
+    private playerHUD!: PlayerHUD;
     private network!: NetworkClient;
     private elapsedTime = 0;
 
@@ -49,6 +51,10 @@ export class GameScene extends Phaser.Scene {
         this.cameraManager = new CameraManager(this);
         this.cameraManager.setup();
 
+        // Create HUD after camera setup
+        this.playerHUD = new PlayerHUD(this);
+        this.playerHUD.create();
+
         this.network = new NetworkClient();
 
         await this.network.connect({
@@ -60,8 +66,7 @@ export class GameScene extends Phaser.Scene {
                     this.collisionManager.setLocalPlayerId(sessionId);
                     this.localHealth = health;
                     this.localMaxHealth = maxHealth;
-                    // Emit initial health update event to UI scene
-                    this.events.emit('updateHealth', health, maxHealth);
+                    this.playerHUD.updateHealth(health, maxHealth);
                 }
                 this.collisionManager.updatePlayerPosition(sessionId, x, y);
                 this.playerHealthBars.add(sessionId, x, y, health, maxHealth);
@@ -75,12 +80,12 @@ export class GameScene extends Phaser.Scene {
                 this.localPlayerManager.onServerUpdate(x, y);
                 this.localHealth = health;
                 this.localMaxHealth = maxHealth;
+                this.playerHUD.updateHealth(health, maxHealth);
 
                 const localSessionId = this.network.getSessionId();
                 if (localSessionId) {
                     this.collisionManager.updatePlayerPosition(localSessionId, x, y);
                 }
-
             },
             onRemoteUpdate: (sessionId, x, y, health, maxHealth) => {
                 const entity = this.playerRegistryManager.get(sessionId);
