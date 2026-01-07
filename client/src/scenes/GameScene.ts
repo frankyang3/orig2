@@ -8,6 +8,7 @@ import { CollisionManager } from "../systems/CollisionManager";
 import { WorldRenderer } from "../systems/WorldRenderer";
 import { CameraManager } from "../systems/CameraManager";
 import { EnemyRenderer } from "../systems/EnemyRenderer";
+import { HealthBarRenderer } from "../systems/HealthBarRenderer";
 import { NetworkClient } from "../network/NetworkManager";
 import { ASSETS } from "../clientConstants";
 
@@ -20,8 +21,12 @@ export class GameScene extends Phaser.Scene {
     private worldRenderer!: WorldRenderer;
     private cameraManager!: CameraManager;
     private enemyRenderer!: EnemyRenderer;
+    private playerHealthBars!: HealthBarRenderer;
     private network!: NetworkClient;
     private elapsedTime = 0;
+
+    private localHealth = 100;
+    private localMaxHealth = 100;
 
     preload(): void {
         this.load.image("ship_0001", ASSETS.SHIP);
@@ -36,6 +41,7 @@ export class GameScene extends Phaser.Scene {
         this.localPlayerManager = new LocalPlayerManager(this, this.collisionManager);
         this.remotePlayersInterpolator = new RemotePlayersInterpolator();
         this.enemyRenderer = new EnemyRenderer(this);
+        this.playerHealthBars = new HealthBarRenderer(this);
 
         this.worldRenderer = new WorldRenderer(this);
         this.worldRenderer.initialize();
@@ -46,32 +52,45 @@ export class GameScene extends Phaser.Scene {
         this.network = new NetworkClient();
 
         await this.network.connect({
-            onAdd: (sessionId, x, y, isLocal) => {
+            // Player callbacks
+            onAdd: (sessionId, x, y, health, maxHealth, isLocal) => {
                 const entity = this.playerRegistryManager.add(sessionId, x, y, isLocal);
                 if (isLocal) {
                     this.localPlayerManager.initialize(entity, x, y, true);
                     this.collisionManager.setLocalPlayerId(sessionId);
+                    this.localHealth = health;
+                    this.localMaxHealth = maxHealth;
+                    // Emit initial health update event to UI scene
+                    this.events.emit('updateHealth', health, maxHealth);
                 }
                 this.collisionManager.updatePlayerPosition(sessionId, x, y);
+                this.playerHealthBars.add(sessionId, x, y, health, maxHealth);
             },
             onRemove: (sessionId) => {
                 this.playerRegistryManager.remove(sessionId);
                 this.collisionManager.removePlayer(sessionId);
+                this.playerHealthBars.remove(sessionId);
             },
-            onLocalUpdate: (x, y) => {
+            onLocalUpdate: (x, y, health, maxHealth) => {
                 this.localPlayerManager.onServerUpdate(x, y);
+                this.localHealth = health;
+                this.localMaxHealth = maxHealth;
+
                 const localSessionId = this.network.getSessionId();
                 if (localSessionId) {
                     this.collisionManager.updatePlayerPosition(localSessionId, x, y);
                 }
+
             },
-            onRemoteUpdate: (sessionId, x, y) => {
+            onRemoteUpdate: (sessionId, x, y, health, maxHealth) => {
                 const entity = this.playerRegistryManager.get(sessionId);
                 if (entity) {
                     this.remotePlayersInterpolator.setTargetPosition(entity, x, y);
                     this.collisionManager.updatePlayerPosition(sessionId, x, y);
+                    this.playerHealthBars.update(sessionId, entity.x, entity.y, health, maxHealth);
                 }
             },
+            // World callbacks
             onWorldInit: (blocks) => {
                 this.worldRenderer.updateAllTiles(blocks);
                 this.collisionManager.setWorldData(blocks);
@@ -81,13 +100,14 @@ export class GameScene extends Phaser.Scene {
                 const index = y * WORLD_WIDTH + x;
                 this.collisionManager.updateBlockType(index, blockType);
             },
-            onEnemyAdd: (id, enemyType, x, y) => {
-                this.enemyRenderer.add(id, enemyType, x, y);
+            // Enemy callbacks
+            onEnemyAdd: (id, enemyType, x, y, health, maxHealth) => {
+                this.enemyRenderer.add(id, enemyType, x, y, health, maxHealth);
             },
             onEnemyRemove: (id) => {
                 this.enemyRenderer.remove(id);
             },
-            onEnemyUpdate: (id, x, y) => {
+            onEnemyUpdate: (id, x, y, health, maxHealth) => {
                 this.enemyRenderer.setTargetPosition(id, x, y);
             },
         });
@@ -105,8 +125,11 @@ export class GameScene extends Phaser.Scene {
         // Interpolate enemies every frame for smooth movement
         this.enemyRenderer.interpolateAll();
 
+        // Update local player health bar and camera
         const localPos = this.localPlayerManager.getPosition();
-        if (localPos) {
+        const localSessionId = this.network.getSessionId();
+        if (localPos && localSessionId) {
+            this.playerHealthBars.update(localSessionId, localPos.x, localPos.y, this.localHealth, this.localMaxHealth);
             this.cameraManager.centerOn(localPos.x, localPos.y);
         }
     }

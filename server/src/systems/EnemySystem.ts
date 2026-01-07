@@ -24,10 +24,14 @@ export class EnemySystem {
     constructor(
         private enemySchemas: MapSchema<Enemy>,
         private players: MapSchema<Player>
-    ) {}
+    ) { }
 
     setWorldMap(worldMap: WorldMap): void {
         this.worldMap = worldMap;
+    }
+
+    getEnemyRegistry(): Map<string, BaseEnemy> {
+        return this.enemies;
     }
 
     spawnEnemy(type: string, x: number, y: number): BaseEnemy | null {

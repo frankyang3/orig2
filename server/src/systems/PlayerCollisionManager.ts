@@ -12,6 +12,7 @@ export class PlayerCollisionManager {
         this.playerRadius = playerRadius;
     }
 
+    //checks based on radius overlap
     checkCollision(sessionId: string, newX: number, newY: number): boolean {
         const minDistance = this.playerRadius * 2;
 
@@ -30,6 +31,7 @@ export class PlayerCollisionManager {
         return false;
     }
 
+    // push players half overlap distance apart
     resolveOverlaps(): void {
         const playerList = Array.from(this.players.entries());
         const minDistance = this.playerRadius * 2;

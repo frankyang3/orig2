@@ -4,96 +4,112 @@ import { GameState } from "../schema/GameState";
 import { PlayerSystem } from "../systems/PlayerSystem";
 import { WorldSystem } from "../systems/WorldSystem";
 import { EnemySystem } from "../systems/EnemySystem";
+import { CombatSystem } from "../systems/CombatSystem";
 import { InputPayload } from "../../../shared/src/types";
 import { FIXED_TIME_STEP, MESSAGE_TYPES } from "../../../shared/src/constants";
 import { MAX_CLIENTS, INITIAL_ENEMY_COUNT } from "../serverConstants";
 
-// Increase buffer size for large world state
-Encoder.BUFFER_SIZE = 64 * 1024; // 64 KB
+Encoder.BUFFER_SIZE = 64 * 1024;
 
 export class GameRoom extends Room<GameState> {
-    maxClients = MAX_CLIENTS;
-    private playerSystem!: PlayerSystem;
-    private worldSystem!: WorldSystem;
-    private enemySystem!: EnemySystem;
-    private elapsedTime = 0;
+  maxClients = MAX_CLIENTS;
+  private playerSystem!: PlayerSystem;
+  private worldSystem!: WorldSystem;
+  private enemySystem!: EnemySystem;
+  private combatSystem!: CombatSystem;
+  private elapsedTime = 0;
 
-    onCreate(): void {
-        this.state = new GameState();
-        this.playerSystem = new PlayerSystem(this.state.players);
-        this.worldSystem = new WorldSystem(this.state.worldMap);
-        this.enemySystem = new EnemySystem(this.state.enemies, this.state.players);
+  onCreate(): void {
+    this.state = new GameState();
+    this.playerSystem = new PlayerSystem(this.state.players);
+    this.worldSystem = new WorldSystem(this.state.worldMap);
+    this.enemySystem = new EnemySystem(this.state.enemies, this.state.players);
+    this.combatSystem = new CombatSystem(this.state.players, this.state.enemies);
 
-        // Give systems access to the world for collision detection
-        this.playerSystem.setWorldMap(this.state.worldMap);
-        this.enemySystem.setWorldMap(this.state.worldMap);
+    // Give systems access to the world for collision detection
+    this.playerSystem.setWorldMap(this.state.worldMap);
+    this.enemySystem.setWorldMap(this.state.worldMap);
 
-        // Initialize world (load from disk or generate new)
-        this.worldSystem.initialize();
+    // Link combat system to enemy registry
+    this.combatSystem.setEnemyRegistry(this.enemySystem.getEnemyRegistry());
 
-        // Spawn initial enemies
-        this.enemySystem.spawnRandomEnemies(INITIAL_ENEMY_COUNT);
-        console.log(`Spawned ${this.state.enemies.size} enemies`);
+    // Set respawn callback
+    this.combatSystem.setRespawnCallback(() => {
+      return this.playerSystem.findSpawnPosition();
+    });
 
-        // Debug: log enemy positions
-        this.state.enemies.forEach((enemy, id) => {
-            console.log(`${id}: ${enemy.enemyType} at (${enemy.x.toFixed(0)}, ${enemy.y.toFixed(0)})`);
-        });
+    // Initialize world (load from disk or generate new)
+    this.worldSystem.initialize();
 
-        this.setupMessageHandlers();
-        this.setupSimulation();
-    }
+    // Spawn initial enemies
+    this.enemySystem.spawnRandomEnemies(INITIAL_ENEMY_COUNT);
+    console.log(`Spawned ${this.state.enemies.size} enemies`);
 
-    private setupMessageHandlers(): void {
-        this.onMessage(MESSAGE_TYPES.INPUT, (client, input: InputPayload) => {
-            this.playerSystem.queueInput(client.sessionId, input);
-        });
+    this.setupMessageHandlers();
+    this.setupSimulation();
+  }
 
-        // Handle block placement
-        this.onMessage(MESSAGE_TYPES.PLACE_BLOCK, (client, data: { x: number; y: number; blockType: number }) => {
-            const success = this.worldSystem.placeBlock(data.x, data.y, data.blockType);
-            if (success) {
-                console.log(`Player ${client.sessionId} placed block at (${data.x}, ${data.y})`);
-            }
-        });
+  private setupMessageHandlers(): void {
+    this.onMessage(MESSAGE_TYPES.INPUT, (client, input: InputPayload) => {
+      // Don't process input if player is dead
+      if (this.combatSystem.isPlayerDead(client.sessionId)) return;
+      this.playerSystem.queueInput(client.sessionId, input);
+    });
 
-        // Handle block breaking
-        this.onMessage(MESSAGE_TYPES.BREAK_BLOCK, (client, data: { x: number; y: number }) => {
-            const success = this.worldSystem.breakBlock(data.x, data.y);
-            if (success) {
-                console.log(`Player ${client.sessionId} broke block at (${data.x}, ${data.y})`);
-            }
-        });
-    }
+    this.onMessage(MESSAGE_TYPES.PLACE_BLOCK, (client, data: { x: number; y: number; blockType: number }) => {
+      if (this.combatSystem.isPlayerDead(client.sessionId)) return;
+      const success = this.worldSystem.placeBlock(data.x, data.y, data.blockType);
+      if (success) {
+        console.log(`Player ${client.sessionId} placed block at (${data.x}, ${data.y})`);
+      }
+    });
 
-    private setupSimulation(): void {
-        this.setSimulationInterval((deltaTime) => {
-            this.elapsedTime += deltaTime;
+    this.onMessage(MESSAGE_TYPES.BREAK_BLOCK, (client, data: { x: number; y: number }) => {
+      if (this.combatSystem.isPlayerDead(client.sessionId)) return;
+      const success = this.worldSystem.breakBlock(data.x, data.y);
+      if (success) {
+        console.log(`Player ${client.sessionId} broke block at (${data.x}, ${data.y})`);
+      }
+    });
+  }
 
-            while (this.elapsedTime >= FIXED_TIME_STEP) {
-                this.elapsedTime -= FIXED_TIME_STEP;
-                this.fixedTick(FIXED_TIME_STEP);
-            }
-        });
-    }
+  private setupSimulation(): void {
+    this.setSimulationInterval((deltaTime) => {
+      this.elapsedTime += deltaTime;
 
-    private fixedTick(deltaTime: number): void {
-        this.playerSystem.processInputs();
-        this.enemySystem.update(deltaTime / 1000); // Convert ms to seconds
-    }
+      while (this.elapsedTime >= FIXED_TIME_STEP) {
+        this.elapsedTime -= FIXED_TIME_STEP;
+        this.fixedTick(FIXED_TIME_STEP);
+      }
+    });
+  }
 
-    onJoin(client: Client): void {
-        console.log(`${client.sessionId} joined`);
-        this.playerSystem.addPlayer(client.sessionId);
-    }
+  private fixedTick(deltaTime: number): void {
+    const currentTime = Date.now();
 
-    onLeave(client: Client): void {
-        console.log(`${client.sessionId} left`);
-        this.playerSystem.removePlayer(client.sessionId);
-    }
+    this.playerSystem.processInputs();
+    this.enemySystem.update(deltaTime / 1000);
+    this.combatSystem.update(currentTime);
+  }
 
-    onDispose(): void {
-        console.log(`Room ${this.roomId} disposing, saving world...`);
-        this.worldSystem.shutdown();
-    }
+  onJoin(client: Client): void {
+    console.log(`${client.sessionId} joined`);
+    this.playerSystem.addPlayer(client.sessionId);
+    this.combatSystem.addPlayer(client.sessionId);
+
+    // Debug: verify player state
+    const player = this.state.players.get(client.sessionId);
+    console.log(`Player created with health: ${player?.health}/${player?.maxHealth}`);
+  }
+
+  onLeave(client: Client): void {
+    console.log(`${client.sessionId} left`);
+    this.playerSystem.removePlayer(client.sessionId);
+    this.combatSystem.removePlayer(client.sessionId);
+  }
+
+  onDispose(): void {
+    console.log(`Room ${this.roomId} disposing, saving world...`);
+    this.worldSystem.shutdown();
+  }
 }

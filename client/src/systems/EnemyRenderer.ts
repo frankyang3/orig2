@@ -1,18 +1,21 @@
 import Phaser from "phaser";
 import { INTERPOLATION_SPEED } from "../clientConstants";
+import { HealthBarRenderer } from "./HealthBarRenderer";
 
 interface EnemyEntity {
     sprite: Phaser.GameObjects.Arc;
-    label?: Phaser.GameObjects.Text;
+    id: string;
+    health: number;
+    maxHealth: number;
 }
 
 const SERVER_X = "serverX";
 const SERVER_Y = "serverY";
 
 const ENEMY_COLORS: Record<string, number> = {
-    slime: 0x44ff44,    // Green
-    skeleton: 0xcccccc, // Gray
-    bat: 0x8844aa,      // Purple
+    slime: 0x44ff44,
+    skeleton: 0xcccccc,
+    bat: 0x8844aa,
 };
 
 const ENEMY_SIZES: Record<string, number> = {
@@ -24,12 +27,14 @@ const ENEMY_SIZES: Record<string, number> = {
 export class EnemyRenderer {
     private scene: Phaser.Scene;
     private enemies: Map<string, EnemyEntity> = new Map();
+    private healthBarRenderer: HealthBarRenderer;
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
+        this.healthBarRenderer = new HealthBarRenderer(scene);
     }
 
-    add(id: string, enemyType: string, x: number, y: number): void {
+    add(id: string, enemyType: string, x: number, y: number, health: number, maxHealth: number): void {
         if (this.enemies.has(id)) return;
 
         const color = ENEMY_COLORS[enemyType] ?? 0xff0000;
@@ -41,20 +46,15 @@ export class EnemyRenderer {
         sprite.setData(SERVER_X, x);
         sprite.setData(SERVER_Y, y);
 
-        // Optional: add enemy type label for debugging
-        // const label = this.scene.add.text(x, y - radius - 10, enemyType, {
-        //     fontSize: '10px',
-        //     color: '#ffffff',
-        // }).setOrigin(0.5).setDepth(6);
-
-        this.enemies.set(id, { sprite });
+        this.enemies.set(id, { sprite, id, health, maxHealth });
+        this.healthBarRenderer.add(id, x, y, health, maxHealth);
     }
 
     remove(id: string): void {
         const enemy = this.enemies.get(id);
         if (enemy) {
             enemy.sprite.destroy();
-            enemy.label?.destroy();
+            this.healthBarRenderer.remove(id);
             this.enemies.delete(id);
         }
     }
@@ -67,8 +67,16 @@ export class EnemyRenderer {
         }
     }
 
+    updateHealth(id: string, health: number, maxHealth: number): void {
+        const enemy = this.enemies.get(id);
+        if (enemy) {
+            enemy.health = health;
+            enemy.maxHealth = maxHealth;
+        }
+    }
+
     interpolateAll(): void {
-        for (const [, enemy] of this.enemies) {
+        for (const [id, enemy] of this.enemies) {
             const serverX = enemy.sprite.getData(SERVER_X);
             const serverY = enemy.sprite.getData(SERVER_Y);
 
@@ -76,11 +84,13 @@ export class EnemyRenderer {
                 enemy.sprite.x = Phaser.Math.Linear(enemy.sprite.x, serverX, INTERPOLATION_SPEED);
                 enemy.sprite.y = Phaser.Math.Linear(enemy.sprite.y, serverY, INTERPOLATION_SPEED);
 
-                // Update label position if present
-                if (enemy.label) {
-                    enemy.label.x = enemy.sprite.x;
-                    enemy.label.y = enemy.sprite.y - (enemy.sprite.radius ?? 12) - 10;
-                }
+                this.healthBarRenderer.update(
+                    id,
+                    enemy.sprite.x,
+                    enemy.sprite.y,
+                    enemy.health,
+                    enemy.maxHealth
+                );
             }
         }
     }

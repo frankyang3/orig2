@@ -177848,10 +177848,10 @@ const gameConfig = {
     height: (0, _clientConstants.DISPLAY).HEIGHT,
     backgroundColor: (0, _clientConstants.DISPLAY).BACKGROUND,
     parent: "phaser-example",
+    pixelArt: true,
     physics: {
         default: "arcade"
     },
-    pixelArt: true,
     scene: [
         (0, _gameScene.GameScene)
     ]
@@ -177872,6 +177872,7 @@ var _collisionManager = require("../systems/CollisionManager");
 var _worldRenderer = require("../systems/WorldRenderer");
 var _cameraManager = require("../systems/CameraManager");
 var _enemyRenderer = require("../systems/EnemyRenderer");
+var _healthBarRenderer = require("../systems/HealthBarRenderer");
 var _networkManager = require("../network/NetworkManager");
 var _clientConstants = require("../clientConstants");
 class GameScene extends (0, _phaserDefault.default).Scene {
@@ -177886,36 +177887,48 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         this.localPlayerManager = new (0, _localPlayerManager.LocalPlayerManager)(this, this.collisionManager);
         this.remotePlayersInterpolator = new (0, _remotePlayerInterpolator.RemotePlayersInterpolator)();
         this.enemyRenderer = new (0, _enemyRenderer.EnemyRenderer)(this);
+        this.playerHealthBars = new (0, _healthBarRenderer.HealthBarRenderer)(this);
         this.worldRenderer = new (0, _worldRenderer.WorldRenderer)(this);
         this.worldRenderer.initialize();
         this.cameraManager = new (0, _cameraManager.CameraManager)(this);
         this.cameraManager.setup();
         this.network = new (0, _networkManager.NetworkClient)();
         await this.network.connect({
-            onAdd: (sessionId, x, y, isLocal)=>{
+            // Player callbacks
+            onAdd: (sessionId, x, y, health, maxHealth, isLocal)=>{
                 const entity = this.playerRegistryManager.add(sessionId, x, y, isLocal);
                 if (isLocal) {
                     this.localPlayerManager.initialize(entity, x, y, true);
                     this.collisionManager.setLocalPlayerId(sessionId);
+                    this.localHealth = health;
+                    this.localMaxHealth = maxHealth;
+                    // Emit initial health update event to UI scene
+                    this.events.emit('updateHealth', health, maxHealth);
                 }
                 this.collisionManager.updatePlayerPosition(sessionId, x, y);
+                this.playerHealthBars.add(sessionId, x, y, health, maxHealth);
             },
             onRemove: (sessionId)=>{
                 this.playerRegistryManager.remove(sessionId);
                 this.collisionManager.removePlayer(sessionId);
+                this.playerHealthBars.remove(sessionId);
             },
-            onLocalUpdate: (x, y)=>{
+            onLocalUpdate: (x, y, health, maxHealth)=>{
                 this.localPlayerManager.onServerUpdate(x, y);
+                this.localHealth = health;
+                this.localMaxHealth = maxHealth;
                 const localSessionId = this.network.getSessionId();
                 if (localSessionId) this.collisionManager.updatePlayerPosition(localSessionId, x, y);
             },
-            onRemoteUpdate: (sessionId, x, y)=>{
+            onRemoteUpdate: (sessionId, x, y, health, maxHealth)=>{
                 const entity = this.playerRegistryManager.get(sessionId);
                 if (entity) {
                     this.remotePlayersInterpolator.setTargetPosition(entity, x, y);
                     this.collisionManager.updatePlayerPosition(sessionId, x, y);
+                    this.playerHealthBars.update(sessionId, entity.x, entity.y, health, maxHealth);
                 }
             },
+            // World callbacks
             onWorldInit: (blocks)=>{
                 this.worldRenderer.updateAllTiles(blocks);
                 this.collisionManager.setWorldData(blocks);
@@ -177925,13 +177938,14 @@ class GameScene extends (0, _phaserDefault.default).Scene {
                 const index = y * (0, _constants.WORLD_WIDTH) + x;
                 this.collisionManager.updateBlockType(index, blockType);
             },
-            onEnemyAdd: (id, enemyType, x, y)=>{
-                this.enemyRenderer.add(id, enemyType, x, y);
+            // Enemy callbacks
+            onEnemyAdd: (id, enemyType, x, y, health, maxHealth)=>{
+                this.enemyRenderer.add(id, enemyType, x, y, health, maxHealth);
             },
             onEnemyRemove: (id)=>{
                 this.enemyRenderer.remove(id);
             },
-            onEnemyUpdate: (id, x, y)=>{
+            onEnemyUpdate: (id, x, y, health, maxHealth)=>{
                 this.enemyRenderer.setTargetPosition(id, x, y);
             }
         });
@@ -177945,8 +177959,13 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         }
         // Interpolate enemies every frame for smooth movement
         this.enemyRenderer.interpolateAll();
+        // Update local player health bar and camera
         const localPos = this.localPlayerManager.getPosition();
-        if (localPos) this.cameraManager.centerOn(localPos.x, localPos.y);
+        const localSessionId = this.network.getSessionId();
+        if (localPos && localSessionId) {
+            this.playerHealthBars.update(localSessionId, localPos.x, localPos.y, this.localHealth, this.localMaxHealth);
+            this.cameraManager.centerOn(localPos.x, localPos.y);
+        }
     }
     fixedTick() {
         if (!this.network.isConnected()) return;
@@ -177957,11 +177976,11 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         for (const entity of this.playerRegistryManager.getRemotePlayers())this.remotePlayersInterpolator.interpolate(entity);
     }
     constructor(...args){
-        super(...args), this.elapsedTime = 0;
+        super(...args), this.elapsedTime = 0, this.localHealth = 100, this.localMaxHealth = 100;
     }
 }
 
-},{"phaser":"9nmdg","../../../shared/src/constants":"5e1U9","../systems/InputManager":"d1Ikp","../systems/PlayerRegistryManager":"hAYvC","../systems/LocalPlayerManager":"fFs6k","../systems/RemotePlayerInterpolator":"hOYcX","../systems/CollisionManager":"3XtzM","../systems/WorldRenderer":"jEGNe","../systems/CameraManager":"l83xX","../network/NetworkManager":"f1pcv","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","../systems/EnemyRenderer":"9M3k1"}],"5e1U9":[function(require,module,exports,__globalThis) {
+},{"phaser":"9nmdg","../../../shared/src/constants":"5e1U9","../systems/InputManager":"d1Ikp","../systems/PlayerRegistryManager":"hAYvC","../systems/LocalPlayerManager":"fFs6k","../systems/RemotePlayerInterpolator":"hOYcX","../systems/CollisionManager":"3XtzM","../systems/WorldRenderer":"jEGNe","../systems/CameraManager":"l83xX","../network/NetworkManager":"f1pcv","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","../systems/EnemyRenderer":"9M3k1","../systems/HealthBarRenderer":"lw85I"}],"5e1U9":[function(require,module,exports,__globalThis) {
 // Timing
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
@@ -178401,6 +178420,7 @@ class NetworkClient {
         try {
             this.room = await this.client.joinOrCreate((0, _constants.ROOM_NAME));
             console.log("Joined room:", this.room.sessionId);
+            // Wait for state to be ready
             this.room.onStateChange.once((state)=>{
                 console.log("State ready:", state);
                 this.setupCallbacks(callbacks);
@@ -178414,17 +178434,26 @@ class NetworkClient {
         if (!this.room) return;
         const $ = (0, _colyseusJs.getStateCallbacks)(this.room);
         const state = this.room.state;
+        // Debug: see what's in the state
         console.log("State:", state);
         console.log("State.worldMap:", state.worldMap);
         console.log("State.players:", state.players);
         console.log("State.enemies:", state.enemies);
-        // Player callbacks
+        // Player Callbacks
         $(state).players.onAdd((player, sessionId)=>{
+            // Debug: log all player properties
+            console.log("Player object received:", player);
+            console.log("Player properties:", {
+                x: player.x,
+                y: player.y,
+                health: player.health,
+                maxHealth: player.maxHealth
+            });
             const isLocal = sessionId === this.room.sessionId;
-            callbacks.onAdd(sessionId, player.x, player.y, isLocal);
+            callbacks.onAdd(sessionId, player.x, player.y, player.health, player.maxHealth, isLocal);
             $(player).onChange(()=>{
-                if (isLocal) callbacks.onLocalUpdate(player.x, player.y);
-                else callbacks.onRemoteUpdate(sessionId, player.x, player.y);
+                if (isLocal) callbacks.onLocalUpdate(player.x, player.y, player.health, player.maxHealth);
+                else callbacks.onRemoteUpdate(sessionId, player.x, player.y, player.health, player.maxHealth);
             });
         });
         $(state).players.onRemove((_, sessionId)=>{
@@ -178450,9 +178479,9 @@ class NetworkClient {
         // Enemy callbacks
         $(state).enemies.onAdd((enemy, id)=>{
             console.log(`Enemy added: ${id} (${enemy.enemyType}) at (${enemy.x}, ${enemy.y})`);
-            callbacks.onEnemyAdd(id, enemy.enemyType, enemy.x, enemy.y);
+            callbacks.onEnemyAdd(id, enemy.enemyType, enemy.x, enemy.y, enemy.health, enemy.maxHealth);
             $(enemy).onChange(()=>{
-                callbacks.onEnemyUpdate(id, enemy.x, enemy.y);
+                callbacks.onEnemyUpdate(id, enemy.x, enemy.y, enemy.health, enemy.maxHealth);
             });
         });
         $(state).enemies.onRemove((_, id)=>{
@@ -187939,6 +187968,7 @@ parcelHelpers.export(exports, "EnemyRenderer", ()=>EnemyRenderer);
 var _phaser = require("phaser");
 var _phaserDefault = parcelHelpers.interopDefault(_phaser);
 var _clientConstants = require("../clientConstants");
+var _healthBarRenderer = require("./HealthBarRenderer");
 const SERVER_X = "serverX";
 const SERVER_Y = "serverY";
 const ENEMY_COLORS = {
@@ -187955,8 +187985,9 @@ class EnemyRenderer {
     constructor(scene){
         this.enemies = new Map();
         this.scene = scene;
+        this.healthBarRenderer = new (0, _healthBarRenderer.HealthBarRenderer)(scene);
     }
-    add(id, enemyType, x, y) {
+    add(id, enemyType, x, y, health, maxHealth) {
         if (this.enemies.has(id)) return;
         const color = ENEMY_COLORS[enemyType] ?? 0xff0000;
         const radius = ENEMY_SIZES[enemyType] ?? 12;
@@ -187965,20 +187996,19 @@ class EnemyRenderer {
         sprite.setDepth(5);
         sprite.setData(SERVER_X, x);
         sprite.setData(SERVER_Y, y);
-        // Optional: add enemy type label for debugging
-        // const label = this.scene.add.text(x, y - radius - 10, enemyType, {
-        //     fontSize: '10px',
-        //     color: '#ffffff',
-        // }).setOrigin(0.5).setDepth(6);
         this.enemies.set(id, {
-            sprite
+            sprite,
+            id,
+            health,
+            maxHealth
         });
+        this.healthBarRenderer.add(id, x, y, health, maxHealth);
     }
     remove(id) {
         const enemy = this.enemies.get(id);
         if (enemy) {
             enemy.sprite.destroy();
-            enemy.label?.destroy();
+            this.healthBarRenderer.remove(id);
             this.enemies.delete(id);
         }
     }
@@ -187989,18 +188019,21 @@ class EnemyRenderer {
             enemy.sprite.setData(SERVER_Y, y);
         }
     }
+    updateHealth(id, health, maxHealth) {
+        const enemy = this.enemies.get(id);
+        if (enemy) {
+            enemy.health = health;
+            enemy.maxHealth = maxHealth;
+        }
+    }
     interpolateAll() {
-        for (const [, enemy] of this.enemies){
+        for (const [id, enemy] of this.enemies){
             const serverX = enemy.sprite.getData(SERVER_X);
             const serverY = enemy.sprite.getData(SERVER_Y);
             if (serverX !== undefined && serverY !== undefined) {
                 enemy.sprite.x = (0, _phaserDefault.default).Math.Linear(enemy.sprite.x, serverX, (0, _clientConstants.INTERPOLATION_SPEED));
                 enemy.sprite.y = (0, _phaserDefault.default).Math.Linear(enemy.sprite.y, serverY, (0, _clientConstants.INTERPOLATION_SPEED));
-                // Update label position if present
-                if (enemy.label) {
-                    enemy.label.x = enemy.sprite.x;
-                    enemy.label.y = enemy.sprite.y - (enemy.sprite.radius ?? 12) - 10;
-                }
+                this.healthBarRenderer.update(id, enemy.sprite.x, enemy.sprite.y, enemy.health, enemy.maxHealth);
             }
         }
     }
@@ -188009,6 +188042,75 @@ class EnemyRenderer {
     }
 }
 
-},{"phaser":"9nmdg","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}]},["elbaT","gNc1f"], "gNc1f", "parcelRequiree8ef", {})
+},{"phaser":"9nmdg","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","./HealthBarRenderer":"lw85I"}],"lw85I":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "HealthBarRenderer", ()=>HealthBarRenderer);
+class HealthBarRenderer {
+    constructor(scene){
+        this.healthBars = new Map();
+        this.barWidth = 40;
+        this.barHeight = 6;
+        this.barOffsetY = -25;
+        this.scene = scene;
+    }
+    add(id, x, y, health, maxHealth) {
+        if (this.healthBars.has(id)) return;
+        const barY = y + this.barOffsetY;
+        // Background (dark gray)
+        const background = this.scene.add.rectangle(x, barY, this.barWidth, this.barHeight, 0x333333);
+        background.setDepth(10);
+        background.setOrigin(0.5, 0.5);
+        // Health fill (green) - origin at left side for easier width updates
+        const healthPercent = Math.max(0, Math.min(1, health / maxHealth));
+        const fill = this.scene.add.rectangle(x - this.barWidth / 2, barY, this.barWidth * healthPercent, this.barHeight, 0x44ff44);
+        fill.setDepth(11);
+        fill.setOrigin(0, 0.5); // Left-aligned origin
+        // Border
+        const border = this.scene.add.rectangle(x, barY, this.barWidth, this.barHeight);
+        border.setStrokeStyle(1, 0x000000);
+        border.setFillStyle();
+        border.setDepth(12);
+        border.setOrigin(0.5, 0.5);
+        this.healthBars.set(id, {
+            background,
+            fill,
+            border
+        });
+    }
+    update(id, x, y, health, maxHealth) {
+        const bar = this.healthBars.get(id);
+        if (!bar) return;
+        const barY = y + this.barOffsetY;
+        const healthPercent = Math.max(0, Math.min(1, health / maxHealth));
+        const fillWidth = Math.max(0, this.barWidth * healthPercent);
+        // Update positions
+        bar.background.setPosition(x, barY);
+        bar.border.setPosition(x, barY);
+        bar.fill.setPosition(x - this.barWidth / 2, barY);
+        // Update fill width
+        bar.fill.width = fillWidth;
+        // Update fill visibility (hide if zero health)
+        bar.fill.setVisible(fillWidth > 0);
+        // Change color based on health percentage
+        if (healthPercent > 0.6) bar.fill.setFillStyle(0x44ff44); // Green
+        else if (healthPercent > 0.3) bar.fill.setFillStyle(0xffff44); // Yellow
+        else bar.fill.setFillStyle(0xff4444); // Red
+    }
+    remove(id) {
+        const bar = this.healthBars.get(id);
+        if (bar) {
+            bar.background.destroy();
+            bar.fill.destroy();
+            bar.border.destroy();
+            this.healthBars.delete(id);
+        }
+    }
+    clear() {
+        for (const [id] of this.healthBars)this.remove(id);
+    }
+}
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}]},["elbaT","gNc1f"], "gNc1f", "parcelRequiree8ef", {})
 
 //# sourceMappingURL=client.0f289648.js.map

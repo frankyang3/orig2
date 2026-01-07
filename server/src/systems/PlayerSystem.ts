@@ -3,7 +3,7 @@ import { Player } from "../schema/Player";
 import { WorldMap } from "../schema/World";
 import { InputPayload } from "../../../shared/src/types";
 import { PLAYER_VELOCITY, TILE_SIZE, BLOCK_TYPE, PLAYER_SIZE } from "../../../shared/src/constants";
-import { PLAYER_SPAWN_X, PLAYER_SPAWN_Y } from "../serverConstants";
+import { PLAYER_MAX_HEALTH, PLAYER_SPAWN_X, PLAYER_SPAWN_Y } from "../serverConstants";
 import { PlayerCollisionManager } from "./PlayerCollisionManager";
 
 export class PlayerSystem {
@@ -24,11 +24,13 @@ export class PlayerSystem {
         const spawnPos = this.findSpawnPosition();
         player.x = spawnPos.x;
         player.y = spawnPos.y;
+        player.health = PLAYER_MAX_HEALTH;
+        player.maxHealth = PLAYER_MAX_HEALTH;
         this.players.set(sessionId, player);
         this.inputQueues.set(sessionId, []);
     }
 
-    private findSpawnPosition(): { x: number; y: number } {
+    public findSpawnPosition(): { x: number; y: number } {
         if (!this.worldMap) {
             return { x: PLAYER_SPAWN_X, y: PLAYER_SPAWN_Y };
         }

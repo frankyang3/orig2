@@ -37,6 +37,10 @@ export abstract class BaseEnemy {
         this.config = config;
     }
 
+    getConfig(): EnemyConfig {
+    return this.config;
+}
+
     getSchema(): Enemy {
         return this.schema;
     }
