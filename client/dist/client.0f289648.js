@@ -178103,6 +178103,7 @@ function createInputPayload() {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "PlayerRegistryManager", ()=>PlayerRegistryManager);
+var _constants = require("../../../shared/src/constants");
 class PlayerRegistryManager {
     constructor(scene){
         this.scene = scene;
@@ -178110,6 +178111,9 @@ class PlayerRegistryManager {
     }
     add(sessionId, x, y, isLocal = false) {
         const entity = this.scene.physics.add.image(x, y, "ship_0001");
+        // Scale sprite to match PLAYER_SIZE and set physics body
+        entity.setDisplaySize((0, _constants.PLAYER_SIZE), (0, _constants.PLAYER_SIZE));
+        entity.body.setSize((0, _constants.PLAYER_SIZE), (0, _constants.PLAYER_SIZE));
         this.entities.set(sessionId, entity);
         if (isLocal) this.localSessionId = sessionId;
         return entity;
@@ -178131,7 +178135,7 @@ class PlayerRegistryManager {
     }
 }
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"fFs6k":[function(require,module,exports,__globalThis) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","../../../shared/src/constants":"5e1U9"}],"fFs6k":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "LocalPlayerManager", ()=>LocalPlayerManager);
@@ -178149,7 +178153,7 @@ class LocalPlayerManager {
         this.serverX = x;
         this.serverY = y;
         if (debug) {
-            this.debugRef = this.scene.add.rectangle(0, 0, entity.width, entity.height);
+            this.debugRef = this.scene.add.rectangle(0, 0, (0, _constants.PLAYER_SIZE), (0, _constants.PLAYER_SIZE));
             this.debugRef.setStrokeStyle(1, 0xff0000);
         }
     }
@@ -178438,21 +178442,8 @@ class NetworkClient {
         if (!this.room) return;
         const $ = (0, _colyseusJs.getStateCallbacks)(this.room);
         const state = this.room.state;
-        // Debug: see what's in the state
-        console.log("State:", state);
-        console.log("State.worldMap:", state.worldMap);
-        console.log("State.players:", state.players);
-        console.log("State.enemies:", state.enemies);
         // Player Callbacks
         $(state).players.onAdd((player, sessionId)=>{
-            // Debug: log all player properties
-            console.log("Player object received:", player);
-            console.log("Player properties:", {
-                x: player.x,
-                y: player.y,
-                health: player.health,
-                maxHealth: player.maxHealth
-            });
             const isLocal = sessionId === this.room.sessionId;
             callbacks.onAdd(sessionId, player.x, player.y, player.health, player.maxHealth, isLocal);
             $(player).onChange(()=>{

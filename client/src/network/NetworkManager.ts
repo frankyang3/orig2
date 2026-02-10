@@ -45,23 +45,9 @@ export class NetworkClient {
         const $ = getStateCallbacks(this.room);
         const state = this.room.state as any;
 
-        // Debug: see what's in the state
-        console.log("State:", state);
-        console.log("State.worldMap:", state.worldMap);
-        console.log("State.players:", state.players);
-        console.log("State.enemies:", state.enemies);
 
         // Player Callbacks
         $(state).players.onAdd((player: any, sessionId: string) => {
-
-            // Debug: log all player properties
-            console.log("Player object received:", player);
-            console.log("Player properties:", {
-                x: player.x,
-                y: player.y,
-                health: player.health,
-                maxHealth: player.maxHealth
-            });
             const isLocal = sessionId === this.room!.sessionId;
             callbacks.onAdd(sessionId, player.x, player.y, player.health, player.maxHealth, isLocal);
 
