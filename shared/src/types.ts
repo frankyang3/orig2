@@ -10,6 +10,10 @@ export interface PlayerState {
   y: number;
 }
 
+export interface AttackPayload {
+  angle: number;
+}
+
 export function createInputPayload(): InputPayload {
   return { left: false, right: false, up: false, down: false };
 }

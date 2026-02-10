@@ -1,7 +1,7 @@
 import { Client, Room } from "colyseus.js";
 import { getStateCallbacks } from "colyseus.js";
 import { ROOM_NAME, MESSAGE_TYPES, WORLD_WIDTH } from "../../../shared/src/constants";
-import { InputPayload } from "../../../shared/src/types";
+import { InputPayload, AttackPayload } from "../../../shared/src/types";
 import { SERVER_URL } from "../clientConstants";
 
 export interface NetworkCallbacks {
@@ -9,7 +9,7 @@ export interface NetworkCallbacks {
     onAdd: (sessionId: string, x: number, y: number, health: number, maxHealth: number, isLocal: boolean) => void;
     onRemove: (sessionId: string) => void;
     onLocalUpdate: (x: number, y: number, health: number, maxHealth: number) => void;
-    onRemoteUpdate: (sessionId: string, x: number, y: number, health: number, maxHealth: number) => void;
+    onRemoteUpdate: (sessionId: string, x: number, y: number, health: number, maxHealth: number, rotation: number) => void;
     // World callbacks
     onWorldInit: (blocks: { blockType: number }[]) => void;
     onBlockChange: (x: number, y: number, blockType: number) => void;
@@ -55,7 +55,7 @@ export class NetworkClient {
                 if (isLocal) {
                     callbacks.onLocalUpdate(player.x, player.y, player.health, player.maxHealth);
                 } else {
-                    callbacks.onRemoteUpdate(sessionId, player.x, player.y, player.health, player.maxHealth);
+                    callbacks.onRemoteUpdate(sessionId, player.x, player.y, player.health, player.maxHealth, player.rotation);
                 }
             });
         });
@@ -101,6 +101,10 @@ export class NetworkClient {
 
     sendInput(input: InputPayload): void {
         this.room?.send(MESSAGE_TYPES.INPUT, input);
+    }
+
+    sendAttack(attack: AttackPayload): void {
+        this.room?.send(MESSAGE_TYPES.ATTACK, attack);
     }
 
     getSessionId(): string | undefined {

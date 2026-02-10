@@ -177874,6 +177874,7 @@ var _cameraManager = require("../systems/CameraManager");
 var _enemyRenderer = require("../systems/EnemyRenderer");
 var _healthBarRenderer = require("../systems/HealthBarRenderer");
 var _playerHUD = require("../systems/PlayerHUD");
+var _attackRenderer = require("../systems/AttackRenderer");
 var _networkManager = require("../network/NetworkManager");
 var _clientConstants = require("../clientConstants");
 class GameScene extends (0, _phaserDefault.default).Scene {
@@ -177896,6 +177897,7 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         // Create HUD after camera setup
         this.playerHUD = new (0, _playerHUD.PlayerHUD)(this);
         this.playerHUD.create();
+        this.attackRenderer = new (0, _attackRenderer.AttackRenderer)(this);
         this.network = new (0, _networkManager.NetworkClient)();
         await this.network.connect({
             // Player callbacks
@@ -177924,12 +177926,13 @@ class GameScene extends (0, _phaserDefault.default).Scene {
                 const localSessionId = this.network.getSessionId();
                 if (localSessionId) this.collisionManager.updatePlayerPosition(localSessionId, x, y);
             },
-            onRemoteUpdate: (sessionId, x, y, health, maxHealth)=>{
+            onRemoteUpdate: (sessionId, x, y, health, maxHealth, rotation)=>{
                 const entity = this.playerRegistryManager.get(sessionId);
                 if (entity) {
                     this.remotePlayersInterpolator.setTargetPosition(entity, x, y);
                     this.collisionManager.updatePlayerPosition(sessionId, x, y);
                     this.playerHealthBars.update(sessionId, entity.x, entity.y, health, maxHealth);
+                    entity.setRotation(rotation);
                 }
             },
             // World callbacks
@@ -177951,6 +177954,7 @@ class GameScene extends (0, _phaserDefault.default).Scene {
             },
             onEnemyUpdate: (id, x, y, health, maxHealth)=>{
                 this.enemyRenderer.setTargetPosition(id, x, y);
+                this.enemyRenderer.updateHealth(id, health, maxHealth);
             }
         });
     }
@@ -177963,8 +177967,28 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         }
         // Interpolate enemies every frame for smooth movement
         this.enemyRenderer.interpolateAll();
-        // Update local player health bar and camera
+        // Rotate local player toward mouse
         const localPos = this.localPlayerManager.getPosition();
+        const localEntity = this.localPlayerManager.getEntity();
+        const mousePos = this.inputManager.getMouseWorldPosition();
+        if (localPos && localEntity) {
+            const angle = Math.atan2(mousePos.y - localPos.y, mousePos.x - localPos.x);
+            localEntity.setRotation(angle);
+            // Handle attack input
+            if (this.inputManager.consumeAttack()) {
+                const now = this.time.now;
+                if (now - this.lastAttackTime >= (0, _constants.ATTACK_COOLDOWN_MS)) {
+                    this.lastAttackTime = now;
+                    this.network.sendAttack({
+                        angle
+                    });
+                    this.attackRenderer.showSwing(localPos.x, localPos.y, angle);
+                }
+            }
+        }
+        // Update attack visual effects
+        this.attackRenderer.update();
+        // Update local player health bar and camera
         const localSessionId = this.network.getSessionId();
         if (localPos && localSessionId) {
             this.playerHealthBars.update(localSessionId, localPos.x, localPos.y, this.localHealth, this.localMaxHealth);
@@ -177980,11 +178004,11 @@ class GameScene extends (0, _phaserDefault.default).Scene {
         for (const entity of this.playerRegistryManager.getRemotePlayers())this.remotePlayersInterpolator.interpolate(entity);
     }
     constructor(...args){
-        super(...args), this.elapsedTime = 0, this.localHealth = 100, this.localMaxHealth = 100;
+        super(...args), this.elapsedTime = 0, this.localHealth = 100, this.localMaxHealth = 100, this.lastAttackTime = 0;
     }
 }
 
-},{"phaser":"9nmdg","../../../shared/src/constants":"5e1U9","../systems/InputManager":"d1Ikp","../systems/PlayerRegistryManager":"hAYvC","../systems/LocalPlayerManager":"fFs6k","../systems/RemotePlayerInterpolator":"hOYcX","../systems/CollisionManager":"3XtzM","../systems/WorldRenderer":"jEGNe","../systems/CameraManager":"l83xX","../network/NetworkManager":"f1pcv","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","../systems/EnemyRenderer":"9M3k1","../systems/HealthBarRenderer":"lw85I","../systems/PlayerHUD":"fqFBQ"}],"5e1U9":[function(require,module,exports,__globalThis) {
+},{"phaser":"9nmdg","../../../shared/src/constants":"5e1U9","../systems/InputManager":"d1Ikp","../systems/PlayerRegistryManager":"hAYvC","../systems/LocalPlayerManager":"fFs6k","../systems/RemotePlayerInterpolator":"hOYcX","../systems/CollisionManager":"3XtzM","../systems/WorldRenderer":"jEGNe","../systems/CameraManager":"l83xX","../systems/EnemyRenderer":"9M3k1","../systems/HealthBarRenderer":"lw85I","../systems/PlayerHUD":"fqFBQ","../systems/AttackRenderer":"1f3u8","../network/NetworkManager":"f1pcv","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"5e1U9":[function(require,module,exports,__globalThis) {
 // Timing
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
@@ -177993,6 +178017,10 @@ parcelHelpers.export(exports, "FIXED_TIME_STEP", ()=>FIXED_TIME_STEP);
 parcelHelpers.export(exports, "PLAYER_VELOCITY", ()=>PLAYER_VELOCITY);
 parcelHelpers.export(exports, "ROOM_NAME", ()=>ROOM_NAME);
 parcelHelpers.export(exports, "MESSAGE_TYPES", ()=>MESSAGE_TYPES);
+parcelHelpers.export(exports, "ATTACK_CONE_HALF_ANGLE", ()=>ATTACK_CONE_HALF_ANGLE);
+parcelHelpers.export(exports, "ATTACK_RANGE", ()=>ATTACK_RANGE);
+parcelHelpers.export(exports, "ATTACK_COOLDOWN_MS", ()=>ATTACK_COOLDOWN_MS);
+parcelHelpers.export(exports, "ATTACK_DAMAGE", ()=>ATTACK_DAMAGE);
 parcelHelpers.export(exports, "MAP_WIDTH", ()=>MAP_WIDTH);
 parcelHelpers.export(exports, "MAP_HEIGHT", ()=>MAP_HEIGHT);
 parcelHelpers.export(exports, "WORLD_HEIGHT", ()=>WORLD_HEIGHT);
@@ -178008,14 +178036,19 @@ const ROOM_NAME = "my_room";
 const MESSAGE_TYPES = {
     INPUT: 0,
     PLACE_BLOCK: 1,
-    BREAK_BLOCK: 2
+    BREAK_BLOCK: 2,
+    ATTACK: 3
 };
+const ATTACK_CONE_HALF_ANGLE = Math.PI / 4; // 45 degrees each side (90 total)
+const ATTACK_RANGE = 60;
+const ATTACK_COOLDOWN_MS = 500;
+const ATTACK_DAMAGE = 25;
 const MAP_WIDTH = 800;
 const MAP_HEIGHT = 600;
 const WORLD_HEIGHT = 50;
 const WORLD_WIDTH = 50;
 const TILE_SIZE = 32; // pixels MAYBE goes in client
-const PLAYER_SIZE = 32;
+const PLAYER_SIZE = 24; // Smaller than tile to fit through 1-wide gaps
 const BLOCK_TYPE = {
     GRASS: 0,
     WOOD: 1,
@@ -178066,6 +178099,9 @@ class InputManager {
     constructor(scene){
         this.scene = scene;
         this.payload = (0, _types.createInputPayload)();
+        this.mouseWorldX = 0;
+        this.mouseWorldY = 0;
+        this.pendingAttack = false;
     }
     init() {
         const keyboard = this.scene.input.keyboard;
@@ -178075,6 +178111,17 @@ class InputManager {
         }
         this.cursorKeys = keyboard.createCursorKeys();
         this.wasd = keyboard.addKeys("w,a,s,d");
+        this.scene.input.on("pointermove", (pointer)=>{
+            this.mouseWorldX = pointer.worldX;
+            this.mouseWorldY = pointer.worldY;
+        });
+        this.scene.input.on("pointerdown", (pointer)=>{
+            if (pointer.leftButtonDown()) {
+                this.mouseWorldX = pointer.worldX;
+                this.mouseWorldY = pointer.worldY;
+                this.pendingAttack = true;
+            }
+        });
         return true;
     }
     getInput() {
@@ -178083,6 +178130,19 @@ class InputManager {
         this.payload.up = this.cursorKeys.up.isDown || this.wasd.w.isDown;
         this.payload.down = this.cursorKeys.down.isDown || this.wasd.s.isDown;
         return this.payload;
+    }
+    getMouseWorldPosition() {
+        return {
+            x: this.mouseWorldX,
+            y: this.mouseWorldY
+        };
+    }
+    consumeAttack() {
+        if (this.pendingAttack) {
+            this.pendingAttack = false;
+            return true;
+        }
+        return false;
     }
 }
 
@@ -178135,7 +178195,7 @@ class PlayerRegistryManager {
     }
 }
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","../../../shared/src/constants":"5e1U9"}],"fFs6k":[function(require,module,exports,__globalThis) {
+},{"../../../shared/src/constants":"5e1U9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"fFs6k":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "LocalPlayerManager", ()=>LocalPlayerManager);
@@ -178206,6 +178266,9 @@ class LocalPlayerManager {
             x: this.entity.x,
             y: this.entity.y
         };
+    }
+    getEntity() {
+        return this.entity ?? null;
     }
 }
 
@@ -178416,6 +178479,250 @@ class CameraManager {
     }
 }
 
+},{"../../../shared/src/constants":"5e1U9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"9M3k1":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "EnemyRenderer", ()=>EnemyRenderer);
+var _phaser = require("phaser");
+var _phaserDefault = parcelHelpers.interopDefault(_phaser);
+var _clientConstants = require("../clientConstants");
+var _healthBarRenderer = require("./HealthBarRenderer");
+const SERVER_X = "serverX";
+const SERVER_Y = "serverY";
+const ENEMY_COLORS = {
+    slime: 0x44ff44,
+    skeleton: 0xcccccc,
+    bat: 0x8844aa
+};
+const ENEMY_SIZES = {
+    slime: 14,
+    skeleton: 15,
+    bat: 10
+};
+class EnemyRenderer {
+    constructor(scene){
+        this.enemies = new Map();
+        this.scene = scene;
+        this.healthBarRenderer = new (0, _healthBarRenderer.HealthBarRenderer)(scene);
+    }
+    add(id, enemyType, x, y, health, maxHealth) {
+        if (this.enemies.has(id)) return;
+        const color = ENEMY_COLORS[enemyType] ?? 0xff0000;
+        const radius = ENEMY_SIZES[enemyType] ?? 12;
+        const sprite = this.scene.add.circle(x, y, radius, color);
+        sprite.setStrokeStyle(2, 0x000000);
+        sprite.setDepth(5);
+        sprite.setData(SERVER_X, x);
+        sprite.setData(SERVER_Y, y);
+        this.enemies.set(id, {
+            sprite,
+            id,
+            health,
+            maxHealth
+        });
+        this.healthBarRenderer.add(id, x, y, health, maxHealth);
+    }
+    remove(id) {
+        const enemy = this.enemies.get(id);
+        if (enemy) {
+            enemy.sprite.destroy();
+            this.healthBarRenderer.remove(id);
+            this.enemies.delete(id);
+        }
+    }
+    setTargetPosition(id, x, y) {
+        const enemy = this.enemies.get(id);
+        if (enemy) {
+            enemy.sprite.setData(SERVER_X, x);
+            enemy.sprite.setData(SERVER_Y, y);
+        }
+    }
+    updateHealth(id, health, maxHealth) {
+        const enemy = this.enemies.get(id);
+        if (enemy) {
+            enemy.health = health;
+            enemy.maxHealth = maxHealth;
+        }
+    }
+    interpolateAll() {
+        for (const [id, enemy] of this.enemies){
+            const serverX = enemy.sprite.getData(SERVER_X);
+            const serverY = enemy.sprite.getData(SERVER_Y);
+            if (serverX !== undefined && serverY !== undefined) {
+                enemy.sprite.x = (0, _phaserDefault.default).Math.Linear(enemy.sprite.x, serverX, (0, _clientConstants.INTERPOLATION_SPEED));
+                enemy.sprite.y = (0, _phaserDefault.default).Math.Linear(enemy.sprite.y, serverY, (0, _clientConstants.INTERPOLATION_SPEED));
+                this.healthBarRenderer.update(id, enemy.sprite.x, enemy.sprite.y, enemy.health, enemy.maxHealth);
+            }
+        }
+    }
+    clear() {
+        for (const [id] of this.enemies)this.remove(id);
+    }
+}
+
+},{"phaser":"9nmdg","../clientConstants":"fGjaF","./HealthBarRenderer":"lw85I","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"lw85I":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "HealthBarRenderer", ()=>HealthBarRenderer);
+class HealthBarRenderer {
+    constructor(scene){
+        this.healthBars = new Map();
+        this.barWidth = 40;
+        this.barHeight = 6;
+        this.barOffsetY = -25;
+        this.scene = scene;
+    }
+    add(id, x, y, health, maxHealth) {
+        if (this.healthBars.has(id)) return;
+        const barY = y + this.barOffsetY;
+        // Background (dark gray)
+        const background = this.scene.add.rectangle(x, barY, this.barWidth, this.barHeight, 0x333333);
+        background.setDepth(10);
+        background.setOrigin(0.5, 0.5);
+        // Health fill (green) - origin at left side for easier width updates
+        const healthPercent = Math.max(0, Math.min(1, health / maxHealth));
+        const fill = this.scene.add.rectangle(x - this.barWidth / 2, barY, this.barWidth * healthPercent, this.barHeight, 0x44ff44);
+        fill.setDepth(11);
+        fill.setOrigin(0, 0.5); // Left-aligned origin
+        // Border
+        const border = this.scene.add.rectangle(x, barY, this.barWidth, this.barHeight);
+        border.setStrokeStyle(1, 0x000000);
+        border.setFillStyle();
+        border.setDepth(12);
+        border.setOrigin(0.5, 0.5);
+        this.healthBars.set(id, {
+            background,
+            fill,
+            border
+        });
+    }
+    update(id, x, y, health, maxHealth) {
+        const bar = this.healthBars.get(id);
+        if (!bar) return;
+        const barY = y + this.barOffsetY;
+        const healthPercent = Math.max(0, Math.min(1, health / maxHealth));
+        const fillWidth = Math.max(0, this.barWidth * healthPercent);
+        // Update positions
+        bar.background.setPosition(x, barY);
+        bar.border.setPosition(x, barY);
+        bar.fill.setPosition(x - this.barWidth / 2, barY);
+        // Update fill width
+        bar.fill.width = fillWidth;
+        // Update fill visibility (hide if zero health)
+        bar.fill.setVisible(fillWidth > 0);
+        // Change color based on health percentage
+        if (healthPercent > 0.6) bar.fill.setFillStyle(0x44ff44); // Green
+        else if (healthPercent > 0.3) bar.fill.setFillStyle(0xffff44); // Yellow
+        else bar.fill.setFillStyle(0xff4444); // Red
+    }
+    remove(id) {
+        const bar = this.healthBars.get(id);
+        if (bar) {
+            bar.background.destroy();
+            bar.fill.destroy();
+            bar.border.destroy();
+            this.healthBars.delete(id);
+        }
+    }
+    clear() {
+        for (const [id] of this.healthBars)this.remove(id);
+    }
+}
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"fqFBQ":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "PlayerHUD", ()=>PlayerHUD);
+class PlayerHUD {
+    constructor(scene){
+        this.barWidth = 200;
+        this.barHeight = 20;
+        this.padding = 20;
+        this.depth = 1000;
+        this.scene = scene;
+    }
+    create() {
+        // Background (dark gray)
+        this.healthBarBackground = this.scene.add.rectangle(this.padding + this.barWidth / 2, this.padding + this.barHeight / 2, this.barWidth, this.barHeight, 0x333333);
+        this.healthBarBackground.setScrollFactor(0);
+        this.healthBarBackground.setDepth(this.depth);
+        // Health fill (green, left-aligned)
+        this.healthBarFill = this.scene.add.rectangle(this.padding, this.padding + this.barHeight / 2, this.barWidth, this.barHeight, 0x44ff44);
+        this.healthBarFill.setOrigin(0, 0.5);
+        this.healthBarFill.setScrollFactor(0);
+        this.healthBarFill.setDepth(this.depth + 1);
+        // Border
+        this.healthBarBorder = this.scene.add.rectangle(this.padding + this.barWidth / 2, this.padding + this.barHeight / 2, this.barWidth, this.barHeight);
+        this.healthBarBorder.setStrokeStyle(2, 0x000000);
+        this.healthBarBorder.setFillStyle();
+        this.healthBarBorder.setScrollFactor(0);
+        this.healthBarBorder.setDepth(this.depth + 2);
+        // Health text centered on bar
+        this.healthText = this.scene.add.text(this.padding + this.barWidth / 2, this.padding + this.barHeight / 2, "100 / 100", {
+            fontSize: "14px",
+            color: "#ffffff",
+            fontStyle: "bold"
+        });
+        this.healthText.setOrigin(0.5, 0.5);
+        this.healthText.setScrollFactor(0);
+        this.healthText.setDepth(this.depth + 3);
+    }
+    updateHealth(health, maxHealth) {
+        const healthPercent = Math.max(0, Math.min(1, health / maxHealth));
+        const fillWidth = this.barWidth * healthPercent;
+        this.healthBarFill.width = fillWidth;
+        // Change color based on health percentage
+        if (healthPercent > 0.3) this.healthBarFill.setFillStyle(0x44ff44); // Green
+        else this.healthBarFill.setFillStyle(0xff4444); // Red
+        // Update text
+        this.healthText.setText(`${Math.ceil(health)} / ${maxHealth}`);
+    }
+}
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"1f3u8":[function(require,module,exports,__globalThis) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "AttackRenderer", ()=>AttackRenderer);
+var _constants = require("../../../shared/src/constants");
+const SWING_DURATION_MS = 200;
+const SWING_START_ALPHA = 0.5;
+const SWING_DEPTH = 20;
+class AttackRenderer {
+    constructor(scene){
+        this.swings = [];
+        this.scene = scene;
+    }
+    showSwing(x, y, angle) {
+        const graphics = this.scene.add.graphics();
+        graphics.setDepth(SWING_DEPTH);
+        this.swings.push({
+            graphics,
+            startTime: this.scene.time.now,
+            x,
+            y,
+            angle
+        });
+    }
+    update() {
+        const now = this.scene.time.now;
+        for(let i = this.swings.length - 1; i >= 0; i--){
+            const swing = this.swings[i];
+            const elapsed = now - swing.startTime;
+            if (elapsed >= SWING_DURATION_MS) {
+                swing.graphics.destroy();
+                this.swings.splice(i, 1);
+                continue;
+            }
+            const progress = elapsed / SWING_DURATION_MS;
+            const alpha = SWING_START_ALPHA * (1 - progress);
+            swing.graphics.clear();
+            swing.graphics.fillStyle(0xffffff, alpha);
+            swing.graphics.slice(swing.x, swing.y, (0, _constants.ATTACK_RANGE), swing.angle - (0, _constants.ATTACK_CONE_HALF_ANGLE), swing.angle + (0, _constants.ATTACK_CONE_HALF_ANGLE), false);
+            swing.graphics.fillPath();
+        }
+    }
+}
+
 },{"../../../shared/src/constants":"5e1U9","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"f1pcv":[function(require,module,exports,__globalThis) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
@@ -178448,7 +178755,7 @@ class NetworkClient {
             callbacks.onAdd(sessionId, player.x, player.y, player.health, player.maxHealth, isLocal);
             $(player).onChange(()=>{
                 if (isLocal) callbacks.onLocalUpdate(player.x, player.y, player.health, player.maxHealth);
-                else callbacks.onRemoteUpdate(sessionId, player.x, player.y, player.health, player.maxHealth);
+                else callbacks.onRemoteUpdate(sessionId, player.x, player.y, player.health, player.maxHealth, player.rotation);
             });
         });
         $(state).players.onRemove((_, sessionId)=>{
@@ -178486,6 +178793,9 @@ class NetworkClient {
     }
     sendInput(input) {
         this.room?.send((0, _constants.MESSAGE_TYPES).INPUT, input);
+    }
+    sendAttack(attack) {
+        this.room?.send((0, _constants.MESSAGE_TYPES).ATTACK, attack);
     }
     getSessionId() {
         return this.room?.sessionId;
@@ -187956,206 +188266,6 @@ exports.write = function(buffer, value, offset, isLE, mLen, nBytes) {
     buffer[offset + i - d] |= s * 128;
 };
 
-},{}],"9M3k1":[function(require,module,exports,__globalThis) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "EnemyRenderer", ()=>EnemyRenderer);
-var _phaser = require("phaser");
-var _phaserDefault = parcelHelpers.interopDefault(_phaser);
-var _clientConstants = require("../clientConstants");
-var _healthBarRenderer = require("./HealthBarRenderer");
-const SERVER_X = "serverX";
-const SERVER_Y = "serverY";
-const ENEMY_COLORS = {
-    slime: 0x44ff44,
-    skeleton: 0xcccccc,
-    bat: 0x8844aa
-};
-const ENEMY_SIZES = {
-    slime: 14,
-    skeleton: 15,
-    bat: 10
-};
-class EnemyRenderer {
-    constructor(scene){
-        this.enemies = new Map();
-        this.scene = scene;
-        this.healthBarRenderer = new (0, _healthBarRenderer.HealthBarRenderer)(scene);
-    }
-    add(id, enemyType, x, y, health, maxHealth) {
-        if (this.enemies.has(id)) return;
-        const color = ENEMY_COLORS[enemyType] ?? 0xff0000;
-        const radius = ENEMY_SIZES[enemyType] ?? 12;
-        const sprite = this.scene.add.circle(x, y, radius, color);
-        sprite.setStrokeStyle(2, 0x000000);
-        sprite.setDepth(5);
-        sprite.setData(SERVER_X, x);
-        sprite.setData(SERVER_Y, y);
-        this.enemies.set(id, {
-            sprite,
-            id,
-            health,
-            maxHealth
-        });
-        this.healthBarRenderer.add(id, x, y, health, maxHealth);
-    }
-    remove(id) {
-        const enemy = this.enemies.get(id);
-        if (enemy) {
-            enemy.sprite.destroy();
-            this.healthBarRenderer.remove(id);
-            this.enemies.delete(id);
-        }
-    }
-    setTargetPosition(id, x, y) {
-        const enemy = this.enemies.get(id);
-        if (enemy) {
-            enemy.sprite.setData(SERVER_X, x);
-            enemy.sprite.setData(SERVER_Y, y);
-        }
-    }
-    updateHealth(id, health, maxHealth) {
-        const enemy = this.enemies.get(id);
-        if (enemy) {
-            enemy.health = health;
-            enemy.maxHealth = maxHealth;
-        }
-    }
-    interpolateAll() {
-        for (const [id, enemy] of this.enemies){
-            const serverX = enemy.sprite.getData(SERVER_X);
-            const serverY = enemy.sprite.getData(SERVER_Y);
-            if (serverX !== undefined && serverY !== undefined) {
-                enemy.sprite.x = (0, _phaserDefault.default).Math.Linear(enemy.sprite.x, serverX, (0, _clientConstants.INTERPOLATION_SPEED));
-                enemy.sprite.y = (0, _phaserDefault.default).Math.Linear(enemy.sprite.y, serverY, (0, _clientConstants.INTERPOLATION_SPEED));
-                this.healthBarRenderer.update(id, enemy.sprite.x, enemy.sprite.y, enemy.health, enemy.maxHealth);
-            }
-        }
-    }
-    clear() {
-        for (const [id] of this.enemies)this.remove(id);
-    }
-}
-
-},{"phaser":"9nmdg","../clientConstants":"fGjaF","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","./HealthBarRenderer":"lw85I"}],"lw85I":[function(require,module,exports,__globalThis) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "HealthBarRenderer", ()=>HealthBarRenderer);
-class HealthBarRenderer {
-    constructor(scene){
-        this.healthBars = new Map();
-        this.barWidth = 40;
-        this.barHeight = 6;
-        this.barOffsetY = -25;
-        this.scene = scene;
-    }
-    add(id, x, y, health, maxHealth) {
-        if (this.healthBars.has(id)) return;
-        const barY = y + this.barOffsetY;
-        // Background (dark gray)
-        const background = this.scene.add.rectangle(x, barY, this.barWidth, this.barHeight, 0x333333);
-        background.setDepth(10);
-        background.setOrigin(0.5, 0.5);
-        // Health fill (green) - origin at left side for easier width updates
-        const healthPercent = Math.max(0, Math.min(1, health / maxHealth));
-        const fill = this.scene.add.rectangle(x - this.barWidth / 2, barY, this.barWidth * healthPercent, this.barHeight, 0x44ff44);
-        fill.setDepth(11);
-        fill.setOrigin(0, 0.5); // Left-aligned origin
-        // Border
-        const border = this.scene.add.rectangle(x, barY, this.barWidth, this.barHeight);
-        border.setStrokeStyle(1, 0x000000);
-        border.setFillStyle();
-        border.setDepth(12);
-        border.setOrigin(0.5, 0.5);
-        this.healthBars.set(id, {
-            background,
-            fill,
-            border
-        });
-    }
-    update(id, x, y, health, maxHealth) {
-        const bar = this.healthBars.get(id);
-        if (!bar) return;
-        const barY = y + this.barOffsetY;
-        const healthPercent = Math.max(0, Math.min(1, health / maxHealth));
-        const fillWidth = Math.max(0, this.barWidth * healthPercent);
-        // Update positions
-        bar.background.setPosition(x, barY);
-        bar.border.setPosition(x, barY);
-        bar.fill.setPosition(x - this.barWidth / 2, barY);
-        // Update fill width
-        bar.fill.width = fillWidth;
-        // Update fill visibility (hide if zero health)
-        bar.fill.setVisible(fillWidth > 0);
-        // Change color based on health percentage
-        if (healthPercent > 0.6) bar.fill.setFillStyle(0x44ff44); // Green
-        else if (healthPercent > 0.3) bar.fill.setFillStyle(0xffff44); // Yellow
-        else bar.fill.setFillStyle(0xff4444); // Red
-    }
-    remove(id) {
-        const bar = this.healthBars.get(id);
-        if (bar) {
-            bar.background.destroy();
-            bar.fill.destroy();
-            bar.border.destroy();
-            this.healthBars.delete(id);
-        }
-    }
-    clear() {
-        for (const [id] of this.healthBars)this.remove(id);
-    }
-}
-
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"fqFBQ":[function(require,module,exports,__globalThis) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "PlayerHUD", ()=>PlayerHUD);
-class PlayerHUD {
-    constructor(scene){
-        this.barWidth = 200;
-        this.barHeight = 20;
-        this.padding = 20;
-        this.depth = 1000;
-        this.scene = scene;
-    }
-    create() {
-        // Background (dark gray)
-        this.healthBarBackground = this.scene.add.rectangle(this.padding + this.barWidth / 2, this.padding + this.barHeight / 2, this.barWidth, this.barHeight, 0x333333);
-        this.healthBarBackground.setScrollFactor(0);
-        this.healthBarBackground.setDepth(this.depth);
-        // Health fill (green, left-aligned)
-        this.healthBarFill = this.scene.add.rectangle(this.padding, this.padding + this.barHeight / 2, this.barWidth, this.barHeight, 0x44ff44);
-        this.healthBarFill.setOrigin(0, 0.5);
-        this.healthBarFill.setScrollFactor(0);
-        this.healthBarFill.setDepth(this.depth + 1);
-        // Border
-        this.healthBarBorder = this.scene.add.rectangle(this.padding + this.barWidth / 2, this.padding + this.barHeight / 2, this.barWidth, this.barHeight);
-        this.healthBarBorder.setStrokeStyle(2, 0x000000);
-        this.healthBarBorder.setFillStyle();
-        this.healthBarBorder.setScrollFactor(0);
-        this.healthBarBorder.setDepth(this.depth + 2);
-        // Health text centered on bar
-        this.healthText = this.scene.add.text(this.padding + this.barWidth / 2, this.padding + this.barHeight / 2, "100 / 100", {
-            fontSize: "14px",
-            color: "#ffffff",
-            fontStyle: "bold"
-        });
-        this.healthText.setOrigin(0.5, 0.5);
-        this.healthText.setScrollFactor(0);
-        this.healthText.setDepth(this.depth + 3);
-    }
-    updateHealth(health, maxHealth) {
-        const healthPercent = Math.max(0, Math.min(1, health / maxHealth));
-        const fillWidth = this.barWidth * healthPercent;
-        this.healthBarFill.width = fillWidth;
-        // Change color based on health percentage
-        if (healthPercent > 0.3) this.healthBarFill.setFillStyle(0x44ff44); // Green
-        else this.healthBarFill.setFillStyle(0xff4444); // Red
-        // Update text
-        this.healthText.setText(`${Math.ceil(health)} / ${maxHealth}`);
-    }
-}
-
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}]},["elbaT","gNc1f"], "gNc1f", "parcelRequiree8ef", {})
+},{}]},["elbaT","gNc1f"], "gNc1f", "parcelRequiree8ef", {})
 
 //# sourceMappingURL=client.0f289648.js.map

@@ -5,7 +5,7 @@ import { PlayerSystem } from "../systems/PlayerSystem";
 import { WorldSystem } from "../systems/WorldSystem";
 import { EnemySystem } from "../systems/EnemySystem";
 import { CombatSystem } from "../systems/CombatSystem";
-import { InputPayload } from "../../../shared/src/types";
+import { InputPayload, AttackPayload } from "../../../shared/src/types";
 import { FIXED_TIME_STEP, MESSAGE_TYPES } from "../../../shared/src/constants";
 import { MAX_CLIENTS, INITIAL_ENEMY_COUNT } from "../serverConstants";
 
@@ -70,6 +70,11 @@ export class GameRoom extends Room<GameState> {
       if (success) {
         console.log(`Player ${client.sessionId} broke block at (${data.x}, ${data.y})`);
       }
+    });
+
+    this.onMessage(MESSAGE_TYPES.ATTACK, (client, data: AttackPayload) => {
+      if (this.combatSystem.isPlayerDead(client.sessionId)) return;
+      this.combatSystem.handlePlayerAttack(client.sessionId, data.angle, Date.now());
     });
   }
 

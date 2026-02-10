@@ -6,6 +6,10 @@ export class InputManager {
     private wasd!: Record<string, Phaser.Input.Keyboard.Key>;
     private payload: InputPayload = createInputPayload();
 
+    private mouseWorldX = 0;
+    private mouseWorldY = 0;
+    private pendingAttack = false;
+
     constructor(private scene: Phaser.Scene) { }
 
     init(): boolean {
@@ -17,6 +21,20 @@ export class InputManager {
 
         this.cursorKeys = keyboard.createCursorKeys();
         this.wasd = keyboard.addKeys("w,a,s,d") as Record<string, Phaser.Input.Keyboard.Key>;
+
+        this.scene.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+            this.mouseWorldX = pointer.worldX;
+            this.mouseWorldY = pointer.worldY;
+        });
+
+        this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+            if (pointer.leftButtonDown()) {
+                this.mouseWorldX = pointer.worldX;
+                this.mouseWorldY = pointer.worldY;
+                this.pendingAttack = true;
+            }
+        });
+
         return true;
     }
 
@@ -26,5 +44,17 @@ export class InputManager {
         this.payload.up = this.cursorKeys.up.isDown || this.wasd.w.isDown;
         this.payload.down = this.cursorKeys.down.isDown || this.wasd.s.isDown;
         return this.payload;
+    }
+
+    getMouseWorldPosition(): { x: number; y: number } {
+        return { x: this.mouseWorldX, y: this.mouseWorldY };
+    }
+
+    consumeAttack(): boolean {
+        if (this.pendingAttack) {
+            this.pendingAttack = false;
+            return true;
+        }
+        return false;
     }
 }

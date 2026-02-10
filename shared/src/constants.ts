@@ -12,7 +12,14 @@ export const MESSAGE_TYPES = {
   INPUT: 0,
   PLACE_BLOCK: 1,
   BREAK_BLOCK: 2,
+  ATTACK: 3,
 } as const;
+
+// Attack
+export const ATTACK_CONE_HALF_ANGLE = Math.PI / 4; // 45 degrees each side (90 total)
+export const ATTACK_RANGE = 60;
+export const ATTACK_COOLDOWN_MS = 500;
+export const ATTACK_DAMAGE = 25;
 
 // Map
 export const MAP_WIDTH = 800;

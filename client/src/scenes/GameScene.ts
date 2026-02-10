@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { FIXED_TIME_STEP, WORLD_WIDTH } from "../../../shared/src/constants";
+import { FIXED_TIME_STEP, WORLD_WIDTH, ATTACK_COOLDOWN_MS } from "../../../shared/src/constants";
 import { InputManager } from "../systems/InputManager";
 import { PlayerRegistryManager } from "../systems/PlayerRegistryManager";
 import { LocalPlayerManager } from "../systems/LocalPlayerManager";
@@ -10,6 +10,7 @@ import { CameraManager } from "../systems/CameraManager";
 import { EnemyRenderer } from "../systems/EnemyRenderer";
 import { HealthBarRenderer } from "../systems/HealthBarRenderer";
 import { PlayerHUD } from "../systems/PlayerHUD";
+import { AttackRenderer } from "../systems/AttackRenderer";
 import { NetworkClient } from "../network/NetworkManager";
 import { ASSETS } from "../clientConstants";
 
@@ -24,11 +25,13 @@ export class GameScene extends Phaser.Scene {
     private enemyRenderer!: EnemyRenderer;
     private playerHealthBars!: HealthBarRenderer;
     private playerHUD!: PlayerHUD;
+    private attackRenderer!: AttackRenderer;
     private network!: NetworkClient;
     private elapsedTime = 0;
 
     private localHealth = 100;
     private localMaxHealth = 100;
+    private lastAttackTime = 0;
 
     preload(): void {
         this.load.image("ship_0001", ASSETS.SHIP);
@@ -54,6 +57,8 @@ export class GameScene extends Phaser.Scene {
         // Create HUD after camera setup
         this.playerHUD = new PlayerHUD(this);
         this.playerHUD.create();
+
+        this.attackRenderer = new AttackRenderer(this);
 
         this.network = new NetworkClient();
 
@@ -87,12 +92,13 @@ export class GameScene extends Phaser.Scene {
                     this.collisionManager.updatePlayerPosition(localSessionId, x, y);
                 }
             },
-            onRemoteUpdate: (sessionId, x, y, health, maxHealth) => {
+            onRemoteUpdate: (sessionId, x, y, health, maxHealth, rotation) => {
                 const entity = this.playerRegistryManager.get(sessionId);
                 if (entity) {
                     this.remotePlayersInterpolator.setTargetPosition(entity, x, y);
                     this.collisionManager.updatePlayerPosition(sessionId, x, y);
                     this.playerHealthBars.update(sessionId, entity.x, entity.y, health, maxHealth);
+                    entity.setRotation(rotation);
                 }
             },
             // World callbacks
@@ -114,6 +120,7 @@ export class GameScene extends Phaser.Scene {
             },
             onEnemyUpdate: (id, x, y, health, maxHealth) => {
                 this.enemyRenderer.setTargetPosition(id, x, y);
+                this.enemyRenderer.updateHealth(id, health, maxHealth);
             },
         });
     }
@@ -130,8 +137,29 @@ export class GameScene extends Phaser.Scene {
         // Interpolate enemies every frame for smooth movement
         this.enemyRenderer.interpolateAll();
 
-        // Update local player health bar and camera
+        // Rotate local player toward mouse
         const localPos = this.localPlayerManager.getPosition();
+        const localEntity = this.localPlayerManager.getEntity();
+        const mousePos = this.inputManager.getMouseWorldPosition();
+        if (localPos && localEntity) {
+            const angle = Math.atan2(mousePos.y - localPos.y, mousePos.x - localPos.x);
+            localEntity.setRotation(angle);
+
+            // Handle attack input
+            if (this.inputManager.consumeAttack()) {
+                const now = this.time.now;
+                if (now - this.lastAttackTime >= ATTACK_COOLDOWN_MS) {
+                    this.lastAttackTime = now;
+                    this.network.sendAttack({ angle });
+                    this.attackRenderer.showSwing(localPos.x, localPos.y, angle);
+                }
+            }
+        }
+
+        // Update attack visual effects
+        this.attackRenderer.update();
+
+        // Update local player health bar and camera
         const localSessionId = this.network.getSessionId();
         if (localPos && localSessionId) {
             this.playerHealthBars.update(localSessionId, localPos.x, localPos.y, this.localHealth, this.localMaxHealth);

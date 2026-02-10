@@ -90,4 +90,8 @@ export class LocalPlayerManager {
         if (!this.entity) return null;
         return { x: this.entity.x, y: this.entity.y };
     }
+
+    getEntity(): Phaser.Types.Physics.Arcade.ImageWithDynamicBody | null {
+        return this.entity ?? null;
+    }
 }

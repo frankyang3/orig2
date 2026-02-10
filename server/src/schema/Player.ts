@@ -6,6 +6,7 @@ export class Player extends Schema {
   @type("number") y: number = 0;
   @type("number") health: number = 100;
   @type("number") maxHealth: number = 100;
+  @type("number") rotation: number = 0;
 
   inputQueue: InputPayload[] = [];
 }

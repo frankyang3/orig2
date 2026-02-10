@@ -2,7 +2,7 @@ import { MapSchema } from "@colyseus/schema";
 import { Player } from "../schema/Player";
 import { Enemy } from "../schema/Enemy";
 import { BaseEnemy } from "../enemies/BaseEnemy";
-import { PLAYER_SIZE } from "../../../shared/src/constants";
+import { PLAYER_SIZE, ATTACK_CONE_HALF_ANGLE, ATTACK_RANGE, ATTACK_COOLDOWN_MS, ATTACK_DAMAGE } from "../../../shared/src/constants";
 import {
     ENEMY_CONTACT_DAMAGE,
     DAMAGE_COOLDOWN_MS,
@@ -12,6 +12,7 @@ import {
 
 interface DamageState {
     lastDamageTime: number;
+    lastAttackTime: number;
     isDead: boolean;
     respawnTime: number;
 }
@@ -37,6 +38,7 @@ export class CombatSystem {
     addPlayer(sessionId: string): void {
         this.playerDamageState.set(sessionId, {
             lastDamageTime: 0,
+            lastAttackTime: 0,
             isDead: false,
             respawnTime: 0,
         });
@@ -136,6 +138,40 @@ export class CombatSystem {
         }
 
         console.log(`Player ${sessionId} respawned`);
+    }
+
+    handlePlayerAttack(sessionId: string, angle: number, currentTime: number): void {
+        const player = this.players.get(sessionId);
+        const damageState = this.playerDamageState.get(sessionId);
+        if (!player || !damageState || damageState.isDead) return;
+
+        // Check attack cooldown
+        if (currentTime - damageState.lastAttackTime < ATTACK_COOLDOWN_MS) return;
+        damageState.lastAttackTime = currentTime;
+
+        // Update player rotation so other clients see facing direction
+        player.rotation = angle;
+
+        // Check all enemies in cone
+        for (const [enemyId, enemySchema] of this.enemies.entries()) {
+            const enemy = this.enemyRegistry.get(enemyId);
+            if (!enemy || !enemy.isAlive()) continue;
+
+            const distance = this.getDistance(player.x, player.y, enemySchema.x, enemySchema.y);
+            if (distance > ATTACK_RANGE) continue;
+
+            // Check if enemy is within the attack cone
+            const angleToEnemy = Math.atan2(enemySchema.y - player.y, enemySchema.x - player.x);
+            let angleDiff = angleToEnemy - angle;
+            // Normalize to [-PI, PI]
+            while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+            while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+            if (Math.abs(angleDiff) <= ATTACK_CONE_HALF_ANGLE) {
+                enemy.takeDamage(ATTACK_DAMAGE);
+                console.log(`Player ${sessionId} hit ${enemyId} for ${ATTACK_DAMAGE} damage (health: ${enemySchema.health})`);
+            }
+        }
     }
 
     isPlayerDead(sessionId: string): boolean {
