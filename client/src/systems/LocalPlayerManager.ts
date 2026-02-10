@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { PLAYER_VELOCITY } from "../../../shared/src/constants";
+import { PLAYER_VELOCITY, PLAYER_SIZE } from "../../../shared/src/constants";
 import { InputPayload } from "../../../shared/src/types";
 import { SNAP_THRESHOLD, CORRECTION_SPEED, CORRECTION_THRESHOLD } from "../clientConstants";
 import { CollisionManager } from "./CollisionManager";
@@ -23,7 +23,7 @@ export class LocalPlayerManager {
         this.serverY = y;
 
         if (debug) {
-            this.debugRef = this.scene.add.rectangle(0, 0, entity.width, entity.height);
+            this.debugRef = this.scene.add.rectangle(0, 0, PLAYER_SIZE, PLAYER_SIZE);
             this.debugRef.setStrokeStyle(1, 0xff0000);
         }
     }

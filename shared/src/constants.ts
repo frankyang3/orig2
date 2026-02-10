@@ -23,7 +23,7 @@ export const WORLD_HEIGHT = 50;
 export const WORLD_WIDTH = 50;
 
 export const TILE_SIZE = 32;    // pixels MAYBE goes in client
-export const PLAYER_SIZE = 32;
+export const PLAYER_SIZE = 24;  // Smaller than tile to fit through 1-wide gaps
 
 // Block Types - should be connected integers RN, GRASS is smallest, STONE is largest
 export const BLOCK_TYPE = {

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { PLAYER_SIZE } from "../../../shared/src/constants";
 
 type PlayerEntity = Phaser.Types.Physics.Arcade.ImageWithDynamicBody;
 
@@ -10,6 +11,11 @@ export class PlayerRegistryManager {
 
     add(sessionId: string, x: number, y: number, isLocal: boolean = false): PlayerEntity {
         const entity = this.scene.physics.add.image(x, y, "ship_0001");
+
+        // Scale sprite to match PLAYER_SIZE and set physics body
+        entity.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+        entity.body.setSize(PLAYER_SIZE, PLAYER_SIZE);
+
         this.entities.set(sessionId, entity);
 
         if (isLocal) {
